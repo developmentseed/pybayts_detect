@@ -19,21 +19,21 @@ Overview
     :target: https://readthedocs.org/projects/pybayts
     :alt: Documentation Status
 
-.. |travis| image:: https://api.travis-ci.com/rbavery/pybayts.svg?branch=master
+.. |travis| image:: https://api.travis-ci.com/developmentseed/pybayts.svg?branch=master
     :alt: Travis-CI Build Status
-    :target: https://travis-ci.com/github/rbavery/pybayts
+    :target: https://travis-ci.com/github/developmentseed/pybayts
 
-.. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/rbavery/pybayts?branch=master&svg=true
+.. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/developmentseed/pybayts?branch=master&svg=true
     :alt: AppVeyor Build Status
-    :target: https://ci.appveyor.com/project/rbavery/pybayts
+    :target: https://ci.appveyor.com/project/developmentseed/pybayts
 
-.. |requires| image:: https://requires.io/github/rbavery/pybayts/requirements.svg?branch=master
+.. |requires| image:: https://requires.io/github/developmentseed/pybayts/requirements.svg?branch=master
     :alt: Requirements Status
-    :target: https://requires.io/github/rbavery/pybayts/requirements/?branch=master
+    :target: https://requires.io/github/developmentseed/pybayts/requirements/?branch=master
 
-.. |codecov| image:: https://codecov.io/gh/rbavery/pybayts/branch/master/graphs/badge.svg?branch=master
+.. |codecov| image:: https://codecov.io/gh/developmentseed/pybayts/branch/master/graphs/badge.svg?branch=master
     :alt: Coverage Status
-    :target: https://codecov.io/github/rbavery/pybayts
+    :target: https://codecov.io/github/developmentseed/pybayts
 
 .. |version| image:: https://img.shields.io/pypi/v/pybayts.svg
     :alt: PyPI Package latest release
@@ -51,9 +51,9 @@ Overview
     :alt: Supported implementations
     :target: https://pypi.org/project/pybayts
 
-.. |commits-since| image:: https://img.shields.io/github/commits-since/rbavery/pybayts/v0.0.0.svg
+.. |commits-since| image:: https://img.shields.io/github/commits-since/developmentseed/pybayts/v0.0.0.svg
     :alt: Commits since latest release
-    :target: https://github.com/rbavery/pybayts/compare/v0.0.0...master
+    :target: https://github.com/developmentseed/pybayts/compare/v0.0.0...master
 
 
 
@@ -72,7 +72,7 @@ Installation
 
 You can also install the in-development version with::
 
-    pip install https://github.com/rbavery/pybayts/archive/master.zip
+    pip install https://github.com/developmentseed/pybayts/archive/master.zip
 
 
 Documentation
