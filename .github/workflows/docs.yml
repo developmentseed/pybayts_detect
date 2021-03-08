@@ -1,20 +1,20 @@
 name: CI
 
-# On every pull request, but only on push to main
+# On push or PR to main
 on:
   push:
     branches:
-    - main
-    tags:
-    - '*'
+      - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   tests:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.8]
 
     steps:
       - uses: actions/checkout@v2
@@ -35,12 +35,14 @@ jobs:
       - name: run pre-commit
         run: pre-commit run --all-files
 
-      - name: Upload Results
-        if: success()
-        uses: codecov/codecov-action@v1
+      # Constantly generate and deploy docs during development
+      - name: Generate Docs
+        env:
+          TOXENV: docs
+        run: tox
+
+      - name: Deploy Docs
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.xml
-          flags: unittests
-          name: ${{ matrix.platform }}-${{ matrix.tox-env }}
-          fail_ci_if_error: false
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist/docs
