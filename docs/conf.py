@@ -25,8 +25,8 @@ version = release = '0.0.0'
 pygments_style = 'trac'
 templates_path = ['.']
 extlinks = {
-    'issue': ('https://github.com/rbavery/pybayts/issues/%s', '#'),
-    'pr': ('https://github.com/rbavery/pybayts/pull/%s', 'PR #'),
+    'issue': ('https://github.com/developmentseed/pybayts/issues/%s', '#'),
+    'pr': ('https://github.com/developmentseed/pybayts/pull/%s', 'PR #'),
 }
 # on_rtd is whether we are on readthedocs.org
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
