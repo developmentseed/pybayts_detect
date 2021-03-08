@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+""" Setup for pybayts """
 # -*- encoding: utf-8 -*-
 
 import io
@@ -14,6 +15,7 @@ from setuptools import setup
 
 
 def read(*names, **kwargs):
+    """ file reading helper"""
     with io.open(
         join(dirname(__file__), *names),
         encoding=kwargs.get("encoding", "utf8"),

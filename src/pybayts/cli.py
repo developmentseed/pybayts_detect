@@ -18,6 +18,7 @@ import click
 
 
 @click.command()
-@click.argument('names', nargs=-1)
+@click.argument("names", nargs=-1)
 def main(names):
+    """ return string representation of provided names argument """
     click.echo(repr(names))

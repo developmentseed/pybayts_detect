@@ -61,6 +61,10 @@ To set up `pybayts` for local development:
 
 6. Submit a pull request through the GitHub website.
 
+Note that this repo is set to use pre-commit to run isort, flake8, pydocstring, black ("uncompromising Python code formatter") and mypy when committing new code. You can add this commit hook with:
+
+$ pre-commit install
+
 Pull Request Guidelines
 -----------------------
 
