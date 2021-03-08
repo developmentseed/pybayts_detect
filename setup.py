@@ -79,7 +79,7 @@ setup(
         "click",
         "numpy==1.16.3",
         "pandas==1.0.0",
-        "pyopencl==2018.2.5",
+        "pyopencl[pocl]==2018.2.5",
         "scikit-learn==0.20.3",
         "scipy==1.2.1",
         "matplotlib==2.2.2",
