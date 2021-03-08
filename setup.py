@@ -77,6 +77,14 @@ setup(
     python_requires=">=3.6",
     install_requires=[
         "click",
+        "numpy==1.16.3",
+        "pandas==1.0.0",
+        "pyopencl==2018.2.5",
+        "scikit-learn==0.20.3",
+        "scipy==1.2.1",
+        "matplotlib==2.2.2",
+        "wget==3.2",
+        "bfast>=0.6.0",
         # eg: 'aspectlib==1.1.1', 'six>=1.7',
     ],
     extras_require={
