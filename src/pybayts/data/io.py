@@ -26,8 +26,7 @@ def read_and_stack_tifs(tif_folder: str):
         arr = rio.open_rasterio(i)
 
         date = i.name[3:11]
-        isodate = "-".join([date[0:4], date[4:6], date[6:8]])
-        dt = datetime.fromisoformat(isodate)
+        dt = datetime(int(date[0:4]), int(date[4:6]), int(date[6:8]))
         names.append(dt)
 
         arr["date"] = dt
