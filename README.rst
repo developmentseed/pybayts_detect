@@ -8,28 +8,20 @@ Overview
     :stub-columns: 1
 
     * - docs
-      - |docs|
+      - https://developmentseed.org/pybayts
     * - tests
-      - | |travis| |appveyor| |requires|
+      - | |ghaction|
         | |codecov|
     * - package
       - | |version| |wheel| |supported-versions| |supported-implementations|
         | |commits-since|
-.. |docs| image:: https://readthedocs.org/projects/pybayts/badge/?style=flat
+.. |docs|
     :target: https://readthedocs.org/projects/pybayts
     :alt: Documentation Status
 
-.. |travis| image:: https://api.travis-ci.com/developmentseed/pybayts.svg?branch=master
-    :alt: Travis-CI Build Status
-    :target: https://travis-ci.com/github/developmentseed/pybayts
-
-.. |appveyor| image:: https://ci.appveyor.com/api/projects/status/github/developmentseed/pybayts?branch=master&svg=true
-    :alt: AppVeyor Build Status
-    :target: https://ci.appveyor.com/project/developmentseed/pybayts
-
-.. |requires| image:: https://requires.io/github/developmentseed/pybayts/requirements.svg?branch=master
-    :alt: Requirements Status
-    :target: https://requires.io/github/developmentseed/pybayts/requirements/?branch=master
+.. |ghaction| image:: https://github.com/github/docs/actions/workflows/checks.yml/badge.svg
+    :alt: Github Action CI Build Status
+    :target: https://github.com/developmentseed/pybayts/actions
 
 .. |codecov| image:: https://codecov.io/gh/developmentseed/pybayts/branch/master/graphs/badge.svg?branch=master
     :alt: Coverage Status
@@ -78,8 +70,7 @@ You can also install the in-development version with::
 Documentation
 =============
 
-
-https://pybayts.readthedocs.io/
+https://developmentseed.org/pybayts
 
 
 Development

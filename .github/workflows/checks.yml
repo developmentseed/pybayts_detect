@@ -43,3 +43,10 @@ jobs:
           flags: unittests
           name: ${{ matrix.platform }}-${{ matrix.tox-env }}
           fail_ci_if_error: false
+
+      # Constantly deploy docs during development
+      - name: Deploy Docs
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist/docs
