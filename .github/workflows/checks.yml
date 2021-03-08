@@ -39,6 +39,7 @@ jobs:
         if: success()
         uses: codecov/codecov-action@v1
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.xml
           flags: unittests
           name: ${{ matrix.platform }}-${{ matrix.tox-env }}
@@ -46,6 +47,7 @@ jobs:
 
       # Constantly deploy docs during development
       - name: Deploy Docs
+        if: matrix.python-version == 3.8
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

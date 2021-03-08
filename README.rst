@@ -19,7 +19,7 @@ Overview
     :target: https://readthedocs.org/projects/pybayts
     :alt: Documentation Status
 
-.. |ghaction| image:: https://github.com/github/docs/actions/workflows/checks.yml/badge.svg
+.. |ghaction| image:: https://github.com/developmentseed/pybayts/actions/workflows/checks.yml/badge.svg
     :alt: Github Action CI Build Status
     :target: https://github.com/developmentseed/pybayts/actions
 
