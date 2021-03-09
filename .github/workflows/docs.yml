@@ -10,8 +10,9 @@ on:
       - main
 
 jobs:
-  tests:
+  docs:
     runs-on: ubuntu-20.04
+    container: developmentseed/pybaytsci
     strategy:
       matrix:
         python-version: [3.8]
