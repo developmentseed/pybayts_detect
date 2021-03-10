@@ -1,8 +1,8 @@
 """Calculating conditional non-forest probabilities
 
-Calculating conditional non-forest probability (PNF). Probabilities are calculated 
-based on pdfs for Forest and Non-Forest (derived from F and NF distributions). 
-Guassian and Weibull pdf types are supported.
+Calculating conditional non-forest probability (PNF). Probabilities are
+calculated based on pdfs for Forest and Non-Forest (derived from F and
+NF distributions). Gaussian and Weibull pdf types are supported.
 
 Original author: Johannes Reiche (Wageningen University)
 Implemented in python by: Development Seed
@@ -10,13 +10,11 @@ References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bay
 """
 
 from typing import Tuple
-import numpy as np
+
 import scipy.stats as stats
 
 
-def calc_pnf(
-    time_series: np.ndarray, pdf: Tuple, bwf: Tuple = (0, 1)
-) -> np.ndarray:
+def calc_pnf(time_series, pdf: Tuple, bwf: Tuple = (0, 1)):
     """Calculating conditional non-forest probability (PNF).
 
     Args:
@@ -54,14 +52,14 @@ def calc_pnf(
         if pdf[1] == "gaussian":
             pnf = stats.norm.pdf(x=time_series, loc=pdf[4], scale=pdf[5])
         elif pdf[1] == "weibull":
-            pnf = stats.weibull.pdf(x=time_series, scale=pdf[5], scale=pdf[5])
+            pnf = stats.weibull.pdf(x=time_series, shape=pdf[5], scale=pdf[5])
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[1].")
 
         # calculate conditinal NF
-        pnf[pnf < 1e-10000] = 0
+        pnf[pnf < 1e-100] = 0
         pnf[pnf > 0] = pnf[pnf > 0] / (pf[pnf > 0] + pnf[pnf > 0])
-        ## apply block weighting function
+        # apply block weighting function
         pnf[pnf < bwf[0]] = bwf[0]
         pnf[pnf > bwf[1]] = bwf[1]
         return pnf
