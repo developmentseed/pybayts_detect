@@ -14,17 +14,29 @@ from typing import Tuple
 import scipy.stats as stats
 
 
-def calc_pnf(time_series, pdf: Tuple, bwf: Tuple = (0, 1)):
+def calc_pnf(
+    time_series,
+    pdf_type: Tuple,
+    forest_dist: Tuple,
+    nforest_dist: Tuple,
+    bwf: Tuple = (0, 1),
+):
     """Calculating conditional non-forest probability (PNF).
 
     Args:
-        time_series (np.ndarray): np.ndarray containing time series at a single pixel.
-        pdf (Tuple): Tuple describing forest and nonforest distributions.
-            pdf[0] = pdf type for Forest, pdf[1] = pdf type for Nonforest, pdf[2] and pdf[3] = pdf
-            parameters describing Forest, pdf[5] and pdf[6] = pdf parameter describing Nonforest.
-            pdf types supported: Gaussian or Weibull.
-        bwf (Tuple, optional): Block weighting function to truncate the NF probability.
-            Defaults to (0,1) = no truncation.
+        time_series (np.ndarray): np.ndarray containing a time series at a
+            single pixel.
+        pdf_type (Tuple): Tuple describing forest and nonforest distributions.
+            pdf[0] = pdf type for Forest, pdf[1] = pdf type for Nonforest. pdf
+            types supported: "gaussian" or "weibull".
+        forest_dist (Tuple): forest_dist[0] and forest_dist[1] = pdf
+            parameters describing Forest. For Gaussian, (mean, sd).
+            For Weibull, (shape, sd).
+        nforest_dist (Tuple): nforest_dist[0] and nforest_dist[1] = pdf
+            parameters describing Non-Forest. For Gaussian, (mean, sd).
+            For Weibull, (shape, sd).
+        bwf (Tuple, optional): Block weighting function to truncate the NF
+            probability. Defaults to (0,1) = no truncation.
 
     Returns:
         np.ndarray: Non-forest probabilities, same length as the time series.
@@ -41,18 +53,24 @@ def calc_pnf(time_series, pdf: Tuple, bwf: Tuple = (0, 1)):
 
     if len(time_series) > 0:
         # Gaussian pdf (mean and sd)
-        if pdf[0] == "gaussian":
-            pf = stats.norm.pdf(x=time_series, loc=pdf[2], scale=pdf[3])
-        elif pdf[0] == "weibull":
-            pf = stats.weibull.pdf(x=time_series, shape=pdf[2], scale=pdf[3])
+        if pdf_type[0] == "gaussian":
+            pf = stats.norm.pdf(x=time_series, loc=forest_dist[0], scale=forest_dist[1])
+        elif pdf_type[0] == "weibull":
+            pf = stats.weibull.pdf(
+                x=time_series, shape=forest_dist[0], scale=forest_dist[1]
+            )
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[0].")
 
         # Weibull pdf (shape and scale), TODO figure out why loc (the mean) wasn't supplied for this distribution
-        if pdf[1] == "gaussian":
-            pnf = stats.norm.pdf(x=time_series, loc=pdf[4], scale=pdf[5])
-        elif pdf[1] == "weibull":
-            pnf = stats.weibull.pdf(x=time_series, shape=pdf[5], scale=pdf[5])
+        if pdf_type[1] == "gaussian":
+            pnf = stats.norm.pdf(
+                x=time_series, loc=nforest_dist[0], scale=nforest_dist[1]
+            )
+        elif pdf_type[1] == "weibull":
+            pnf = stats.weibull.pdf(
+                x=time_series, shape=nforest_dist[0], scale=nforest_dist[1]
+            )
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[1].")
 
