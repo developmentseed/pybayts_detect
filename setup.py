@@ -77,7 +77,6 @@ setup(
     python_requires=">=3.6",
     install_requires=[
         "click",
-        "pyopencl[pocl]",
         "bfast>=0.6.0",
         # eg: 'aspectlib==1.1.1', 'six>=1.7',
     ],

@@ -1,4 +1,4 @@
-name: CI
+name: Tests
 
 # On every pull request, but only on push to main
 on:
@@ -12,29 +12,31 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-20.04
-    container: developmentseed/pybaytsci
-    strategy:
-      matrix:
-        python-version: [3.6.9, 3.7.5, 3.8.0]
+    container: developmentseed/pybaytsci:latest
 
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install tox codecov pre-commit
 
+      - name: Check pyopencl vendors
+        run: |
+          python -m pip install pyopencl
+          ls /etc/OpenCL/vendors
+          python ./test_pocl.py
+
       # Run tox using the version of Python in `PATH`
-      - name: Run Tox
+      - name: Tox
         run: tox -e py
 
       # Run pre-commit
-      - name: run pre-commit
-        run: pre-commit run --all-files
+      - name: Pre-commit
+        run: |
+          pre-commit install --install-hooks
+          pre-commit run --all-files
 
       - name: Upload Results
         if: success()

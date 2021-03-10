@@ -1,12 +1,9 @@
-FROM nvidia/opencl:runtime-ubuntu18.04
-ARG DEBIAN_FRONTEND=noninteractive
+FROM matthewfeickert/docker-python3-ubuntu:3.8.7
+USER root
 RUN apt-get update && apt-get install -y \
     git \
     gpg-agent \
     wget \
     curl \
-    gcc \
-
-RUN curl -fsSL https://deb.nodesource.com/setup_14.x | bash -
-RUN apt-get install -y nodejs
-
+    libpocl-dev \
+    nodejs
