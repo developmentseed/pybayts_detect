@@ -31,10 +31,10 @@ def calc_pnf(time_series, pdf: Tuple, bwf: Tuple = (0, 1)):
 
     Example:
         ndvi = [0.5,0.6,0.7]
-        pdf_type = ["gaussian","gaussian"]
-        pdfF = (0.85, 0.1) # mean and sd
-        pdfNF = (0.3, 0.2)  #mean and sd
-        pdf = pdf_type + pdfF + pdfNF
+        pdf_type = ["gaussian", "gaussian"]
+        pdfF = [0.85, 0.1]  # mean and sd
+        pdfNF = [0.3, 0.2]  # mean and sd
+        pdf = tuple(pdf_type + pdfF + pdfNF)
         # calculate conditional non-forest probabilities
         calc_pnf(ndvi, pdf)
     """
