@@ -1,4 +1,4 @@
-name: CI
+name: Tests
 
 # On every pull request, but only on push to main
 on:
@@ -40,7 +40,9 @@ jobs:
 
       # Run pre-commit
       - name: run pre-commit
-        run: pre-commit run --all-files
+        run: |
+          pre-commit install --install-hooks
+          pre-commit run --all-files
 
       - name: Upload Results
         if: success()

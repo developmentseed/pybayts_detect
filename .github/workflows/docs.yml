@@ -1,4 +1,4 @@
-name: CI
+name: Doc Generation
 
 # On push or PR to main
 on:
@@ -34,7 +34,9 @@ jobs:
 
       # Run pre-commit
       - name: run pre-commit
-        run: pre-commit run --all-files
+        run: |
+          pre-commit install --install-hooks
+          pre-commit run --all-files
 
       # Constantly generate and deploy docs during development
       - name: Generate Docs
