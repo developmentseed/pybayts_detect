@@ -26,7 +26,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install tox codecov pre-commit
+          python -m pip install tox codecov pre-commit wheel
+
+      - name: check this pyopencl vendors
+        run: |
+          python -m pip install pyopencl
+          ls /etc/OpenCL/vendors
+          python ./test_pocl.py
 
       # Run tox using the version of Python in `PATH`
       - name: Run Tox

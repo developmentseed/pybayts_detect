@@ -1,3 +1,2 @@
 ### bayts requirements
 bfast>=0.6.0
-pyopencl[pocl]
