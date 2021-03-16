@@ -16,8 +16,10 @@ def test_calc_cpnf():
     expected = np.array([0.99283853, 0.78698604, 0.17248069])
     assert np.allclose(probabilities, expected)
 
+
 def test_read_and_stack_example_tif():
     from pybayts.data.io import read_and_stack_tifs
+
     folder_vv = "./baytsdata/s1vv_tseries/"
     folder_ndvi = "./baytsdata/lndvi_tseries/"
     s1vv_ts = read_and_stack_tifs(folder_vv, ds="vv")
@@ -27,19 +29,19 @@ def test_read_and_stack_example_tif():
 
 
 def test_stack_merge():
-    from pybayts.data.io import read_and_stack_tifs
     from pybayts.bayts import stack_merge_cpnf_tseries
+    from pybayts.data.io import read_and_stack_tifs
 
     folder_vv = "./baytsdata/s1vv_tseries/"
     folder_ndvi = "./baytsdata/lndvi_tseries/"
 
     pdf_type_l = ("gaussian", "gaussian")
-    pdf_forest_l = (0,0.1)  # mean and sd
-    pdf_nonforest_l = (-0.5,0.125)  # mean and sd
+    pdf_forest_l = (0, 0.1)  # mean and sd
+    pdf_nonforest_l = (-0.5, 0.125)  # mean and sd
     bwf_l = (0, 1)
     pdf_type_s = ("gaussian", "gaussian")
-    pdf_forest_s = (-1,0.75)  # mean and sd
-    pdf_nonforest_s = (-4,1)  # mean and sd
+    pdf_forest_s = (-1, 0.75)  # mean and sd
+    pdf_nonforest_s = (-4, 1)  # mean and sd
     bwf_s = (0, 1)
 
     s1vv_ts = read_and_stack_tifs(folder_vv, ds="vv")
