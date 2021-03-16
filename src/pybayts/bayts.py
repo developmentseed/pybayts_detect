@@ -63,40 +63,6 @@ def stack_merge_cpnf_tseries(
     outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
 
-
-def create_bayts_ts(timeseries):
-    """[summary]
-
-    Args:
-        timeseries (xr.DataSet): An xarray Dataset containing the two
-            time series and conditional non-forest probabilities.
-        pdf_lst (Tuple): The pdf parameters for calc_cpnf.
-        bwf (tuple, optional): Block wieghting parameters for calc_cpnf.
-            Defaults to (0.1, 0.9).
-
-    Returns:
-        xr.DataSet: A Dataset containing the original 2 time series and
-            refined conditional non-forest probabilities, or "bayts time
-            series".
-    """
-    # refined cpnf for dates with observation of s1vv and lndvi
-    # lines 68-77 jreiche bayts
-    refined_cpnf_two_obs = calc_posterior(
-        timeseries["pnf_s1vv"], timeseries["pnf_lndvi"]
-    )
-    timeseries_refined = xr.where(
-        timeseries["pnf_s1vv"].notnull() & timeseries["pnf_lndvi"].notnull(),
-        refined_cpnf_two_obs,
-        timeseries,
-    )
-    nan_s1vv = timeseries_refined["pnf_s1vv"].isnull()
-    refined_s1vv = xr.where(
-        nan_s1vv, timeseries_refined["pnf_lndvi"], timeseries_refined["pnf_s1vv"]
-    )
-    timeseries_refined["pnf_s1vv"] = refined_s1vv
-    return timeseries_refined
-
-
 def calc_cpnf(
     time_series,
     pdf_type: Tuple,
@@ -191,3 +157,31 @@ def calc_posterior(prior, likelihood):
     return (prior * likelihood) / (
         (prior * likelihood) + ((1 - prior) * (1 - likelihood))
     )
+
+def create_bayts_ts(timeseries):
+    """Calculates the initial conditional non-forest probabilities before iterative bayesian updating.
+
+    Args:
+        timeseries (xr.DataSet): An xarray Dataset containing the two
+            time series and conditional non-forest probabilities for each timeseries.
+
+    Returns:
+        xr.DataSet: A Dataset containing the original 2 time series and
+            refined conditional non-forest probabilities.
+    """
+    # refined cpnf for dates with observation of s1vv and lndvi
+    # lines 68-77 jreiche bayts
+    refined_cpnf_two_obs = calc_posterior(
+        timeseries["pnf_s1vv"], timeseries["pnf_lndvi"]
+    )
+    timeseries_refined = xr.where(
+        timeseries["pnf_s1vv"].notnull() & timeseries["pnf_lndvi"].notnull(),
+        refined_cpnf_two_obs,
+        timeseries,
+    )
+    nan_s1vv = timeseries_refined["pnf_s1vv"].isnull()
+    refined_s1vv = xr.where(
+        nan_s1vv, timeseries_refined["pnf_lndvi"], timeseries_refined["pnf_s1vv"]
+    )
+    timeseries_refined["pnf_s1vv"] = refined_s1vv
+    return timeseries_refined
