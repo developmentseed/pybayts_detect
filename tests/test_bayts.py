@@ -3,6 +3,7 @@ import numpy as np
 
 def test_calc_cpnf():
     from pybayts.bayts import calc_cpnf
+
     ndvi_time_series = [0.5, 0.6, 0.7]
     pdf_type = ("gaussian", "gaussian")
     pdf_forest = (0.85, 0.1)  # mean and sd

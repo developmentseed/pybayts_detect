@@ -22,6 +22,7 @@ def read(*names, **kwargs):
     ) as fh:
         return fh.read()
 
+
 inst_reqs = [
     "click",
     "bfast>=0.6.0",
