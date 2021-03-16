@@ -1,6 +1,6 @@
+"""Functions for plotting pixel and raster time series."""
 import matplotlib.pyplot as plt
 import seaborn as sns
-from matplotlib import dates
 
 
 def plot_pixel_ts(df, obs_column: str = "lndvi_obs"):

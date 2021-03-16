@@ -5,23 +5,31 @@ Implemented in python by: Development Seed
 References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bayesian Approach to Combine Landsat and ALOS PALSAR Time Series for Near Real-Time Deforestation Detection. Remote Sensing. 7(5), 4973-4996; doi:10.3390/rs70504973}
 """
 
-from typing import List
 from typing import Tuple
 
 import scipy.stats as stats
 import xarray as xr
 
 
-def stack_merge_cpnf_tseries(s1vv_ts, lndvi_ts, pdf_type_l: Tuple, pdf_type_s: Tuple, 
-        pdf_forest_l: Tuple,, pdf_nonforest_l: Tuple, pdf_forest_s: Tuple,, pdf_nonforest_s: Tuple, 
-        bwf_l: Tuple= (0.1, 0.9), bwf_s: Tuple= (0.1, 0.9)):
-    """Calculates CPNF, adds them to their respective observation DataArrays and outer joins two xarray 
+def stack_merge_cpnf_tseries(
+    s1vv_ts,
+    lndvi_ts,
+    pdf_type_l: Tuple,
+    pdf_type_s: Tuple,
+    pdf_forest_l: Tuple,
+    pdf_nonforest_l: Tuple,
+    pdf_forest_s: Tuple,
+    pdf_nonforest_s: Tuple,
+    bwf_l: Tuple = (0.1, 0.9),
+    bwf_s: Tuple = (0.1, 0.9),
+):
+    """Calculates CPNF, adds them to their respective observation DataArrays and outer joins two xarray
         DataArrays into a Dataset.
 
     Args:
-        s1vv_ts (xr.DataArray): The Sentinel-1 time series. Must have 
+        s1vv_ts (xr.DataArray): The Sentinel-1 time series. Must have
             dims ["date", "y", "x"] and name "s1vv".
-        lndvi_ts (xr.DataArray): The NDVI time series. Must have 
+        lndvi_ts (xr.DataArray): The NDVI time series. Must have
             dims ["date", "y", "x"] and name "lndvi".
         pdf_type_l (Tuple): tuple describing forest and nonforest distributions for landsat ndvi.
             pdf[0] = pdf type for Forest, pdf[1] = pdf type for Nonforest. pdf
@@ -50,33 +58,42 @@ def stack_merge_cpnf_tseries(s1vv_ts, lndvi_ts, pdf_type_l: Tuple, pdf_type_s: T
     s1vv_ts = s1vv_ts.to_dataset()
     pnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
     pnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
-    lndvi_ts['pnf_lndvi'] = (["date", "y", "x"], pnf_l)
-    s1vv_ts['pnf_s1vv'] = (["date", "y", "x"], pnf_s)
+    lndvi_ts["pnf_lndvi"] = (["date", "y", "x"], pnf_l)
+    s1vv_ts["pnf_s1vv"] = (["date", "y", "x"], pnf_s)
     outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
+
 
 def create_bayts_ts(timeseries):
     """[summary]
 
     Args:
-        timeseries (xr.DataSet): An xarray Dataset containing the two 
-            time series and conditional non-forest probabilities. 
+        timeseries (xr.DataSet): An xarray Dataset containing the two
+            time series and conditional non-forest probabilities.
         pdf_lst (Tuple): The pdf parameters for calc_cpnf.
-        bwf (tuple, optional): Block wieghting parameters for calc_cpnf. 
+        bwf (tuple, optional): Block wieghting parameters for calc_cpnf.
             Defaults to (0.1, 0.9).
 
     Returns:
-        xr.DataSet: A Dataset containing the original 2 time series and 
-            refined conditional non-forest probabilities, or "bayts time 
-            series". 
+        xr.DataSet: A Dataset containing the original 2 time series and
+            refined conditional non-forest probabilities, or "bayts time
+            series".
     """
     # refined cpnf for dates with observation of s1vv and lndvi
     # lines 68-77 jreiche bayts
-    refined_cpnf_two_obs = calc_posterior(timeseries['pnf_s1vv'], timeseries['pnf_lndvi'])
-    timeseries_refined = xr.where(timeseries['pnf_s1vv'].notnull() & timeseries['pnf_lndvi'].notnull(), refined_cpnf_two_obs, timeseries)
-    nan_s1vv = timeseries_refined['pnf_s1vv'].isnull()
-    refined_s1vv = xr.where(nan_s1vv, timeseries_refined['pnf_lndvi'], timeseries_refined['pnf_s1vv'])
-    timeseries_refined['pnf_s1vv'] = refined_s1vv
+    refined_cpnf_two_obs = calc_posterior(
+        timeseries["pnf_s1vv"], timeseries["pnf_lndvi"]
+    )
+    timeseries_refined = xr.where(
+        timeseries["pnf_s1vv"].notnull() & timeseries["pnf_lndvi"].notnull(),
+        refined_cpnf_two_obs,
+        timeseries,
+    )
+    nan_s1vv = timeseries_refined["pnf_s1vv"].isnull()
+    refined_s1vv = xr.where(
+        nan_s1vv, timeseries_refined["pnf_lndvi"], timeseries_refined["pnf_s1vv"]
+    )
+    timeseries_refined["pnf_s1vv"] = refined_s1vv
     return timeseries_refined
 
 
@@ -125,7 +142,9 @@ def calc_cpnf(
         # Gaussian pdf (mean and sd)
         if pdf_type[0] == "gaussian":
             # the probability of observing the observation given it is non-forest
-            pobs_f = stats.norm.pdf(x=time_series, loc=forest_dist[0], scale=forest_dist[1])
+            pobs_f = stats.norm.pdf(
+                x=time_series, loc=forest_dist[0], scale=forest_dist[1]
+            )
         elif pdf_type[0] == "weibull":
             pobs_f = stats.weibull.pdf(
                 x=time_series, shape=forest_dist[0], scale=forest_dist[1]
@@ -148,24 +167,27 @@ def calc_cpnf(
         # calculate conditinal NF
         pobs_nf[pobs_nf < 1e-100] = 0
         # pobs_nf is now the conditional NF probability, not p of the observation given NF
-        pobs_nf[pobs_nf > 0] = pobs_nf[pobs_nf > 0] / (pobs_f[pobs_nf > 0] + pobs_nf[pobs_nf > 0])
+        pobs_nf[pobs_nf > 0] = pobs_nf[pobs_nf > 0] / (
+            pobs_f[pobs_nf > 0] + pobs_nf[pobs_nf > 0]
+        )
         # apply block weighting function
         pobs_nf[pobs_nf < bwf[0]] = bwf[0]
         pobs_nf[pobs_nf > bwf[1]] = bwf[1]
         return pobs_nf
 
+
 def calc_posterior(prior, likelihood):
     """Calculates posterior probability according to Bayes' theorem.
 
     Args:
-        prior (float):  Probability a pixel is non-forest before the next data observation is accounted for. 
+        prior (float):  Probability a pixel is non-forest before the next data observation is accounted for.
             Single value or array like.
-        likelihood (float): Likelihood of observing a pixel observation given it is non-forest. 
-            Single value or array like of same shape. 
+        likelihood (float): Likelihood of observing a pixel observation given it is non-forest.
+            Single value or array like of same shape.
 
     Returns:
         float: The posterior probability of a pixel being non forest given an observed data point.
     """
-    return (prior * likelihood)/ ((prior * likelihood) + ((1 - prior) * (1 - likelihood)))
-
-
+    return (prior * likelihood) / (
+        (prior * likelihood) + ((1 - prior) * (1 - likelihood))
+    )
