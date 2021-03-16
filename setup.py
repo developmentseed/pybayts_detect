@@ -22,6 +22,13 @@ def read(*names, **kwargs):
     ) as fh:
         return fh.read()
 
+inst_reqs = [
+    "click",
+    "bfast>=0.6.0",
+    "xarray>=0.17",
+    "rioxarray>=0.3.1",
+]
+
 
 setup(
     name="pybayts",
@@ -75,13 +82,7 @@ setup(
         # eg: 'keyword1', 'keyword2', 'keyword3',
     ],
     python_requires=">=3.6",
-    install_requires=[
-        "click",
-        "bfast>=0.6.0",
-        "xarray>=0.17",
-        "rioxarray>=0.3.1",
-        # eg: 'aspectlib==1.1.1', 'six>=1.7',
-    ],
+    install_requires=inst_reqs,
     extras_require={
         # eg:
         #   'rst': ['docutils>=0.11'],

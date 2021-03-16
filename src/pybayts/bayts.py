@@ -54,10 +54,10 @@ def stack_merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    lndvi_ts = lndvi_ts.to_dataset()
-    s1vv_ts = s1vv_ts.to_dataset()
     pnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
     pnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
+    lndvi_ts = lndvi_ts.to_dataset()
+    s1vv_ts = s1vv_ts.to_dataset()
     lndvi_ts["pnf_lndvi"] = (["date", "y", "x"], pnf_l)
     s1vv_ts["pnf_s1vv"] = (["date", "y", "x"], pnf_s)
     outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
