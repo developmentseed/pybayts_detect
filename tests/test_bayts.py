@@ -29,7 +29,7 @@ def test_read_and_stack_example_tif():
 
 
 def test_stack_merge():
-    from pybayts.bayts import stack_merge_cpnf_tseries
+    from pybayts.bayts import merge_cpnf_tseries
     from pybayts.data.io import read_and_stack_tifs
 
     folder_vv = "tests/baytsdata/s1vv_tseries/"
@@ -50,7 +50,7 @@ def test_stack_merge():
     lndvi_ts = read_and_stack_tifs(folder_ndvi, ds="lndvi")
     lndvi_ts.name = "lndvi"
 
-    ds = stack_merge_cpnf_tseries(
+    ds = merge_cpnf_tseries(
         s1vv_ts,
         lndvi_ts,
         pdf_type_l,
@@ -68,7 +68,7 @@ def test_stack_merge():
 
 def test_create_bayts():
     from pybayts.bayts import create_bayts_ts
-    from pybayts.bayts import stack_merge_cpnf_tseries
+    from pybayts.bayts import merge_cpnf_tseries
     from pybayts.data.io import read_and_stack_tifs
 
     folder_vv = "tests/baytsdata/s1vv_tseries/"
@@ -89,7 +89,7 @@ def test_create_bayts():
     lndvi_ts = read_and_stack_tifs(folder_ndvi, ds="lndvi")
     lndvi_ts.name = "lndvi"
 
-    ds = stack_merge_cpnf_tseries(
+    ds = merge_cpnf_tseries(
         s1vv_ts,
         lndvi_ts,
         pdf_type_l,

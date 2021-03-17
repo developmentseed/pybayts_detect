@@ -12,7 +12,7 @@ import scipy.stats as stats
 import xarray as xr
 
 
-def stack_merge_cpnf_tseries(
+def merge_cpnf_tseries(
     s1vv_ts,
     lndvi_ts,
     pdf_type_l: Tuple,
@@ -212,69 +212,45 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
             observation is flagged. Defaults to 0.5
     """
     assert chi >= cpnf_min  # chi should be greater or equal to the initial criteria
-    bayts["Initial-Flagged-Change"] = xr.where(bayts > cpnf_min, True, False)
-    if chi == cpnf_min:
-        bayts["Non-Forest-Change"] = bayts["Initial-Flagged-Change"]
-        return bayts
-
+    bayts.name = "bayts"
+    bayts = bayts.to_dataset()
+    bayts["initial_flag"] = xr.where(bayts["bayts"] > cpnf_min, True, False)
+    bayts["flagged_change"] = xr.where(
+        bayts["bayts"] > cpnf_min, True, False
+    )  # this is updated in the loop
+    bayts["updated_bayts"] = bayts["bayts"]
     # need to probably figure out a better way to do this than iterating over each pixel ts individually
     # in a single process. 1 ts per dask process? numba? cython?
     # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
     for y in range(len(bayts["y"])):
         for x in range(len(bayts["x"])):
-            pixel_ts = bayts[:, y, x]
-            possible_nf_indices = np.argwhere(pixel_ts["Initial-Flagged-Change"])
-            for ind in possible_nf_indices:
-                print(ind)
+            pixel_ts = bayts.isel(y=y, x=x)
+            update_pixel(pixel_ts, chi)
+    return bayts
 
 
-#       for (r in 1:length(ind)){
-#         for (t in ind[r]:en) {
-#           #############################################################
-#           # step 2.1: Update Flag and PChange for current time step (t)
-#           # (case 1) No confirmed or flagged change:
-#           if (bayts$Flag[(t - 1)] == "0" || bayts$Flag[(t -
-#                                                         1)] == "oldFlag") {
-#             i <- 0
-#             prior <- as.double(bayts$PNF[t - 1])
-#             likelihood <- as.double(bayts$PNF[t])
-#             # can be replaced with calcPosterior?
-#             postieror <- (prior * likelihood)/((prior *
-#                                                   likelihood) + ((1 - prior) * (1 - likelihood)))
-#             bayts$Flag[t] <- "Flag"
-#             bayts$PChange[t] <- postieror
-#           }
-#           # (case 2) Flagged change at preveous time step: update PChange
-#           if (bayts$Flag[(t - 1)] == "Flag") {
-#             prior <- as.double(bayts$PChange[t - 1])
-#             likelihood <- as.double(bayts$PNF[t])
-#             postieror <- (prior * likelihood)/((prior * likelihood) +
-#                                                  ((1 - prior) * (1 - likelihood)))
-#             bayts$PChange[t] <- postieror
-#             bayts$Flag[t] <- "Flag"
-#             i <- i + 1
-#           }
-#           ###############################################
-#           # step 2.2: Confirm and reject flagged changes
-#           if (bayts$Flag[(t)] == "Flag") {
-#             if ((i > 0)) {
-#               if ((as.double(bayts$PChange[t])) < 0.5) {
-#                 bayts$Flag[(t - i):t] <- 0
-#                 bayts$Flag[(t - i)] <- "oldFlag"
-#                 break
-#               }
-#             }
-#             # confirm change in case PChange >= chi
-#             if ((as.double(bayts$PChange[t])) >= chi) {
-#               if ((as.double(bayts$PNF[t])) >= 0.5) {
-#                 bayts$Flag[min(which(bayts$Flag == "Flag")):t] <- "Change"
-#                 return(bayts)
-#               }
-#             }
-#           }
-#         }
-#       }
-#     }
-#   }
-#   return(bayts)
-# }
+def update_pixel(pixel_ts, chi):
+    """Modifies a single pixel view of a spatial timeseries to update the probabilities.
+
+    Args:
+        pixel_ts (xr.Dataset): An xarray Dataset with a single (date) dimension and 4 variables:
+            the original time series "bayts", the initially flagged nonforest observations "initial_flag",
+            the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
+    """
+    # don't update if all values are nan
+    if pixel_ts.isnull().all():
+        return
+    else:
+        possible_nf_indices = np.argwhere(pixel_ts["initial_flag"])
+        # for each observation, we update it starting from the observation that preceded it
+        for ind in possible_nf_indices:
+            for t in range(ind, len(pixel_ts["date"])):
+                prior = pixel_ts["updated_bayts"][t - 1]
+                likelihood = pixel_ts["updated_bayts"][t]
+                posterior = calc_posterior(prior, likelihood)
+                pixel_ts["updated_bayts"][t] = posterior
+                if posterior < chi:
+                    pixel_ts["flagged_change"][t] = False
+                else:
+                    pixel_ts["flagged_change"][t] = True
+        return
