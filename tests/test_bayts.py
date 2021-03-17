@@ -50,7 +50,7 @@ def test_stack_merge():
     lndvi_ts = read_and_stack_tifs(folder_ndvi, ds="lndvi")
     lndvi_ts.name = "lndvi"
 
-    stack_merge_cpnf_tseries(
+    ds = stack_merge_cpnf_tseries(
         s1vv_ts,
         lndvi_ts,
         pdf_type_l,
@@ -63,4 +63,43 @@ def test_stack_merge():
         bwf_s,
     )
 
-    assert stack_merge_cpnf_tseries
+    assert ds
+
+def test_create_bayts():
+    from pybayts.bayts import stack_merge_cpnf_tseries, create_bayts_ts
+    from pybayts.data.io import read_and_stack_tifs
+
+    folder_vv = "tests/baytsdata/s1vv_tseries/"
+    folder_ndvi = "tests/baytsdata/lndvi_tseries/"
+
+    pdf_type_l = ("gaussian", "gaussian")
+    pdf_forest_l = (0, 0.1)  # mean and sd
+    pdf_nonforest_l = (-0.5, 0.125)  # mean and sd
+    bwf_l = (0, 1)
+    pdf_type_s = ("gaussian", "gaussian")
+    pdf_forest_s = (-1, 0.75)  # mean and sd
+    pdf_nonforest_s = (-4, 1)  # mean and sd
+    bwf_s = (0, 1)
+
+    s1vv_ts = read_and_stack_tifs(folder_vv, ds="vv")
+    s1vv_ts.name = "s1vv"
+
+    lndvi_ts = read_and_stack_tifs(folder_ndvi, ds="lndvi")
+    lndvi_ts.name = "lndvi"
+
+    ds = stack_merge_cpnf_tseries(
+        s1vv_ts,
+        lndvi_ts,
+        pdf_type_l,
+        pdf_type_s,
+        pdf_forest_l,
+        pdf_nonforest_l,
+        pdf_forest_s,
+        pdf_nonforest_s,
+        bwf_l,
+        bwf_s,
+    )
+
+    cond_nf_prob_ts = create_bayts_ts(ds)
+
+    assert len(cond_nf_prob_ts.shape) == 3

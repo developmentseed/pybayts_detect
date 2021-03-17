@@ -54,12 +54,12 @@ def stack_merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    pnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
-    pnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
+    cpnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
+    cpnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
     lndvi_ts = lndvi_ts.to_dataset()
     s1vv_ts = s1vv_ts.to_dataset()
-    lndvi_ts["pnf_lndvi"] = (["date", "y", "x"], pnf_l)
-    s1vv_ts["pnf_s1vv"] = (["date", "y", "x"], pnf_s)
+    lndvi_ts["cpnf_lndvi"] = (["date", "y", "x"], cpnf_l)
+    s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
     outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
 
@@ -159,29 +159,102 @@ def calc_posterior(prior, likelihood):
     )
 
 def create_bayts_ts(timeseries):
-    """Calculates the initial conditional non-forest probabilities before iterative bayesian updating.
+    """Calculates the initial conditional non-forest probability time series before iterative bayesian updating.
 
     Args:
         timeseries (xr.DataSet): An xarray Dataset containing the two
             time series and conditional non-forest probabilities for each timeseries.
 
     Returns:
-        xr.DataSet: A Dataset containing the original 2 time series and
-            refined conditional non-forest probabilities.
+        xr.Dataarray: A Datarray containing the refined conditional non-forest probabilities 
+        (a single time series). This is the data fusion part of the bayts algorithm.
     """
     # refined cpnf for dates with observation of s1vv and lndvi
     # lines 68-77 jreiche bayts
     refined_cpnf_two_obs = calc_posterior(
-        timeseries["pnf_s1vv"], timeseries["pnf_lndvi"]
+        timeseries["cpnf_s1vv"], timeseries["cpnf_lndvi"]
     )
-    timeseries_refined = xr.where(
-        timeseries["pnf_s1vv"].notnull() & timeseries["pnf_lndvi"].notnull(),
+    # where we have ndvi observations, we want to use the refined cpnf since ndvi is more related to deforestation than backscatter
+    timeseries["cpnf_s1vv_refined"] = xr.where(
+        timeseries["cpnf_s1vv"].notnull() & timeseries["cpnf_lndvi"].notnull(),
         refined_cpnf_two_obs,
-        timeseries,
+        timeseries["cpnf_s1vv"],
     )
-    nan_s1vv = timeseries_refined["pnf_s1vv"].isnull()
-    refined_s1vv = xr.where(
-        nan_s1vv, timeseries_refined["pnf_lndvi"], timeseries_refined["pnf_s1vv"]
+    # where we don't have backscatter but we have ndvi, we want to use ndvi cpnf
+    nan_s1vv = timeseries["cpnf_s1vv_refined"].isnull()
+    bayts = xr.where(
+        nan_s1vv, timeseries["cpnf_lndvi"], timeseries["cpnf_s1vv_refined"]
     )
-    timeseries_refined["pnf_s1vv"] = refined_s1vv
-    return timeseries_refined
+    # any nans left in the output should be from image boundary issues or quality masking
+    return bayts
+
+def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
+    """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
+
+    Args:
+        bayts (xr.DataArray): "bayts" time series created with create_bayts from two time series 
+            (vv backscatter and ndvi).
+        chi (float, optional): Threshold of Pchange at which the change is confirmed. Defaults to 0.5.
+        cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
+            observation is flagged. Defaults to 0.5
+    """
+
+    # need to probably figure out a better way to do this than iterating over each pixel ts individually
+    # in a single process. 1 ts per dask process? numba? cython?
+    # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
+    for y in range(len(bayts_ts['y'])):
+        for x in range(len(bayts_ts['x'])): 
+            pixel_ts = bayts_ts[:,y,x]
+            possible_nf_indices = np.argwhere(pixel_ts > cpnf_min)
+            for ind in possible_nf_indices:
+                possible_forest_mask = pixel_ts.where(pixel_ts  < cpnf_min)
+#       for (r in 1:length(ind)){
+#         for (t in ind[r]:en) {
+#           #############################################################
+#           # step 2.1: Update Flag and PChange for current time step (t)
+#           # (case 1) No confirmed or flagged change: 
+#           if (bayts$Flag[(t - 1)] == "0" || bayts$Flag[(t - 
+#                                                         1)] == "oldFlag") {
+#             i <- 0
+#             prior <- as.double(bayts$PNF[t - 1])
+#             likelihood <- as.double(bayts$PNF[t])
+#             # can be replaced with calcPosterior?
+#             postieror <- (prior * likelihood)/((prior * 
+#                                                   likelihood) + ((1 - prior) * (1 - likelihood)))
+#             bayts$Flag[t] <- "Flag"
+#             bayts$PChange[t] <- postieror
+#           }
+#           # (case 2) Flagged change at preveous time step: update PChange
+#           if (bayts$Flag[(t - 1)] == "Flag") {
+#             prior <- as.double(bayts$PChange[t - 1])
+#             likelihood <- as.double(bayts$PNF[t])
+#             postieror <- (prior * likelihood)/((prior * likelihood) + 
+#                                                  ((1 - prior) * (1 - likelihood)))
+#             bayts$PChange[t] <- postieror
+#             bayts$Flag[t] <- "Flag"
+#             i <- i + 1
+#           }
+#           ###############################################
+#           # step 2.2: Confirm and reject flagged changes
+#           if (bayts$Flag[(t)] == "Flag") {
+#             if ((i > 0)) {
+#               if ((as.double(bayts$PChange[t])) < 0.5) {
+#                 bayts$Flag[(t - i):t] <- 0
+#                 bayts$Flag[(t - i)] <- "oldFlag"
+#                 break 
+#               }
+#             }
+#             # confirm change in case PChange >= chi
+#             if ((as.double(bayts$PChange[t])) >= chi) {
+#               if ((as.double(bayts$PNF[t])) >= 0.5) {
+#                 bayts$Flag[min(which(bayts$Flag == "Flag")):t] <- "Change"
+#                 return(bayts)
+#               }
+#             }
+#           }
+#         }
+#       }
+#     }
+#   }
+#   return(bayts)
+# }
