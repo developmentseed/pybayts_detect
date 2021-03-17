@@ -65,8 +65,10 @@ def test_stack_merge():
 
     assert ds
 
+
 def test_create_bayts():
-    from pybayts.bayts import stack_merge_cpnf_tseries, create_bayts_ts
+    from pybayts.bayts import create_bayts_ts
+    from pybayts.bayts import stack_merge_cpnf_tseries
     from pybayts.data.io import read_and_stack_tifs
 
     folder_vv = "tests/baytsdata/s1vv_tseries/"

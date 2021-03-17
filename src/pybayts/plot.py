@@ -23,14 +23,15 @@ def plot_df_pixel_ts(df, obs_column: str = "lndvi_obs"):
     # nicer label format for dates
     fig.autofmt_xdate()
 
+
 def plot_da_pixel_ts(da, obs_column: str):
     """Plots a regularly spaced time series with NaNs displayed as a scatterplot.
 
     Args:
-        da ([type]): A DataArray with one dimension named "date". Can be taken from a 3D array. 
-            For example: bayts_ts[:,50,20] takes a single pixel's time series if bayts_ts is a 
-            3D DataArray with dims (date, y x). 
-        obs_column (str): The name of the observation column, can be chosen byt he user to reflect 
+        da ([type]): A DataArray with one dimension named "date". Can be taken from a 3D array.
+            For example: bayts_ts[:,50,20] takes a single pixel's time series if bayts_ts is a
+            3D DataArray with dims (date, y x).
+        obs_column (str): The name of the observation column, can be chosen byt he user to reflect
             what the DataArray measures.
     """
     df = da.to_dataframe(name=obs_column)

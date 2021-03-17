@@ -7,6 +7,7 @@ References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bay
 
 from typing import Tuple
 
+import numpy as np
 import scipy.stats as stats
 import xarray as xr
 
@@ -62,6 +63,7 @@ def stack_merge_cpnf_tseries(
     s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
     outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
+
 
 def calc_cpnf(
     time_series,
@@ -158,6 +160,7 @@ def calc_posterior(prior, likelihood):
         (prior * likelihood) + ((1 - prior) * (1 - likelihood))
     )
 
+
 def create_bayts_ts(timeseries):
     """Calculates the initial conditional non-forest probability time series before iterative bayesian updating.
 
@@ -166,7 +169,7 @@ def create_bayts_ts(timeseries):
             time series and conditional non-forest probabilities for each timeseries.
 
     Returns:
-        xr.Dataarray: A Datarray containing the refined conditional non-forest probabilities 
+        xr.Dataarray: A Datarray containing the refined conditional non-forest probabilities
         (a single time series). This is the data fusion part of the bayts algorithm.
     """
     # refined cpnf for dates with observation of s1vv and lndvi
@@ -188,11 +191,12 @@ def create_bayts_ts(timeseries):
     # any nans left in the output should be from image boundary issues or quality masking
     return bayts
 
+
 def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
 
     Args:
-        bayts (xr.DataArray): "bayts" time series created with create_bayts from two time series 
+        bayts (xr.DataArray): "bayts" time series created with create_bayts from two time series
             (vv backscatter and ndvi).
         chi (float, optional): Threshold of Pchange at which the change is confirmed. Defaults to 0.5.
         cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
@@ -202,24 +206,26 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     # need to probably figure out a better way to do this than iterating over each pixel ts individually
     # in a single process. 1 ts per dask process? numba? cython?
     # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
-    for y in range(len(bayts_ts['y'])):
-        for x in range(len(bayts_ts['x'])): 
-            pixel_ts = bayts_ts[:,y,x]
+    for y in range(len(bayts["y"])):
+        for x in range(len(bayts["x"])):
+            pixel_ts = bayts[:, y, x]
             possible_nf_indices = np.argwhere(pixel_ts > cpnf_min)
             for ind in possible_nf_indices:
-                possible_forest_mask = pixel_ts.where(pixel_ts  < cpnf_min)
+                possible_forest_mask = pixel_ts.where(pixel_ts < cpnf_min)
+
+
 #       for (r in 1:length(ind)){
 #         for (t in ind[r]:en) {
 #           #############################################################
 #           # step 2.1: Update Flag and PChange for current time step (t)
-#           # (case 1) No confirmed or flagged change: 
-#           if (bayts$Flag[(t - 1)] == "0" || bayts$Flag[(t - 
+#           # (case 1) No confirmed or flagged change:
+#           if (bayts$Flag[(t - 1)] == "0" || bayts$Flag[(t -
 #                                                         1)] == "oldFlag") {
 #             i <- 0
 #             prior <- as.double(bayts$PNF[t - 1])
 #             likelihood <- as.double(bayts$PNF[t])
 #             # can be replaced with calcPosterior?
-#             postieror <- (prior * likelihood)/((prior * 
+#             postieror <- (prior * likelihood)/((prior *
 #                                                   likelihood) + ((1 - prior) * (1 - likelihood)))
 #             bayts$Flag[t] <- "Flag"
 #             bayts$PChange[t] <- postieror
@@ -228,7 +234,7 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
 #           if (bayts$Flag[(t - 1)] == "Flag") {
 #             prior <- as.double(bayts$PChange[t - 1])
 #             likelihood <- as.double(bayts$PNF[t])
-#             postieror <- (prior * likelihood)/((prior * likelihood) + 
+#             postieror <- (prior * likelihood)/((prior * likelihood) +
 #                                                  ((1 - prior) * (1 - likelihood)))
 #             bayts$PChange[t] <- postieror
 #             bayts$Flag[t] <- "Flag"
@@ -241,7 +247,7 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
 #               if ((as.double(bayts$PChange[t])) < 0.5) {
 #                 bayts$Flag[(t - i):t] <- 0
 #                 bayts$Flag[(t - i)] <- "oldFlag"
-#                 break 
+#                 break
 #               }
 #             }
 #             # confirm change in case PChange >= chi
