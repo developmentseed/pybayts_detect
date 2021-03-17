@@ -195,6 +195,15 @@ def create_bayts_ts(timeseries):
 def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
 
+    Returns a boolean xarray Dataset with dimensions (date, y, x) and two additional 
+        variables besides the bayts timeseries:
+        Non-Forest-Change: where "True" means a change was flagged confirmed as Non-Forest.
+            False means a change was not initially flagged, or was flagged but then 
+            unflagged by the iterative bayesian updating.
+        Initial-Flagged-Change: where "True" indicates that the observation initially satisfied 
+            the cpnf_min criteria to be flagged as possible change. "False" indicates the 
+            observation was never considered as a possible change.
+    
     Args:
         bayts (xr.DataArray): "bayts" time series created with create_bayts from two time series
             (vv backscatter and ndvi).
@@ -202,6 +211,11 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
         cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
             observation is flagged. Defaults to 0.5
     """
+    assert chi >= cpnf_min #chi should be greater or equal to the initial criteria
+    bayts['Initial-Flagged-Change'] = xr.where(bayts > cpnf_min, True, False)
+    if chi == cpnf_min:
+        bayts['Non-Forest-Change'] = bayts['Initial-Flagged-Change'] 
+        return bayts
 
     # need to probably figure out a better way to do this than iterating over each pixel ts individually
     # in a single process. 1 ts per dask process? numba? cython?
@@ -209,10 +223,9 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     for y in range(len(bayts["y"])):
         for x in range(len(bayts["x"])):
             pixel_ts = bayts[:, y, x]
-            possible_nf_indices = np.argwhere(pixel_ts > cpnf_min)
+            possible_nf_indices = np.argwhere(pixel_ts['Initial-Flagged-Change'])
             for ind in possible_nf_indices:
-                possible_forest_mask = pixel_ts.where(pixel_ts < cpnf_min)
-
+                print(ind)
 
 #       for (r in 1:length(ind)){
 #         for (t in ind[r]:en) {
