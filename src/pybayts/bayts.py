@@ -257,7 +257,7 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     for y in range(len(bayts["y"])):
         for x in range(len(bayts["x"])):
             pixel_ts = bayts.isel(y=y, x=x)
-            pixel_ts = update_pixel(pixel_ts, chi)
+            pixel_ts = update_pixel(pixel_ts, chi, cpnf_min)
             if pixel_ts.isnull().all():
                 pass
             else:
