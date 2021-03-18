@@ -106,30 +106,21 @@ def test_create_bayts():
 
     assert len(cond_nf_prob_ts.shape) == 3
 
+
 def test_deseason():
-    from pybayts.bayts import create_bayts_ts
     from pybayts.bayts import deseason_ts
     from pybayts.data.io import read_and_stack_tifs
+    import numpy as np
+    from pandas import read_csv
+
+    s1vv_ts_pix = np.array(read_csv("tests/baytsdata/single_ts_s1vv.csv")['x'])[-16:]
 
     folder_vv = "tests/baytsdata/s1vv_tseries/"
-    folder_ndvi = "tests/baytsdata/lndvi_tseries/"
-
-    pdf_type_l = ("gaussian", "gaussian")
-    pdf_forest_l = (0, 0.1)  # mean and sd
-    pdf_nonforest_l = (-0.5, 0.125)  # mean and sd
-    bwf_l = (0, 1)
-    pdf_type_s = ("gaussian", "gaussian")
-    pdf_forest_s = (-1, 0.75)  # mean and sd
-    pdf_nonforest_s = (-4, 1)  # mean and sd
-    bwf_s = (0, 1)
 
     s1vv_ts = read_and_stack_tifs(folder_vv, ds="vv")
     s1vv_ts.name = "s1vv"
 
-    lndvi_ts = read_and_stack_tifs(folder_ndvi, ds="lndvi")
-    lndvi_ts.name = "lndvi"
-
     deseason_ts(s1vv_ts)
 
-    nonnan_deseasoned = s1vv_ts[:,0,52][~np.isnan(s1vv_ts[:,0,52])].data
-    np.allclose(nonnan_deseasoned, s1vv_ts_pix, rtol=1e-03)
+    nonnan_deseasoned = s1vv_ts[:, 0, 52][~np.isnan(s1vv_ts[:, 0, 52])].data
+    assert np.allclose(nonnan_deseasoned, s1vv_ts_pix, rtol=1e-03)

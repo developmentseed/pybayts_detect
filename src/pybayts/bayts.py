@@ -64,8 +64,11 @@ def merge_cpnf_tseries(
     outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
 
-def deseason_ts(timeseries, percentile: float =0.95, min_v: float=None, max_v:float=None):
-    """Deseasonalizes the timeseries in place. This doesn't do any seasonal curve fitting, 
+
+def deseason_ts(
+    timeseries, percentile: float = 0.95, min_v: float = None, max_v: float = None
+):
+    """Deseasonalizes the timeseries in place. This doesn't do any seasonal curve fitting,
         but instead subtracts a percentile.
 
     Args:
@@ -82,13 +85,16 @@ def deseason_ts(timeseries, percentile: float =0.95, min_v: float=None, max_v:fl
     if min_v:
         timeseries = timeseries.where(timeseries < min_v, np.nan, timeseries)
     # percentiles for each raster scene
-    percentiles = timeseries.quantile(percentile, dim=("x","y"), interpolation="nearest")
+    percentiles = timeseries.quantile(
+        percentile, dim=("x", "y"), interpolation="nearest"
+    )
 
     # deseasonalize
     for i in range(len(timeseries)):
         timeseries[i] = timeseries[i] - percentiles[i]
 
     return timeseries
+
 
 def calc_cpnf(
     timeseries,
@@ -131,7 +137,7 @@ def calc_cpnf(
         calc_pnf(ndvi, pdf)
     """
 
-    if len(time_series) > 0:
+    if len(timeseries) > 0:
         # Gaussian pdf (mean and sd)
         if pdf_type[0] == "gaussian":
             # the probability of observing the observation given it is non-forest
@@ -237,7 +243,7 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
             observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
     """
     assert chi >= cpnf_min  # chi should be greater or equal to the initial criteria
-    assert chi >= .5 # chi should be greater than .5
+    assert chi >= 0.5  # chi should be greater than .5
     bayts.name = "bayts"
     bayts = bayts.to_dataset()
     bayts["initial_flag"] = xr.where(bayts["bayts"] > cpnf_min, True, False)
@@ -255,8 +261,8 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
             if pixel_ts.isnull().all():
                 pass
             else:
-                bayts["updated_bayts"][:,y,x] = pixel_ts["updated_bayts"]
-                bayts["flagged_change"][:,y,x] = pixel_ts["flagged_change"]
+                bayts["updated_bayts"][:, y, x] = pixel_ts["updated_bayts"]
+                bayts["flagged_change"][:, y, x] = pixel_ts["flagged_change"]
     return bayts
 
 
@@ -279,10 +285,12 @@ def update_pixel(pixel_ts, chi, cpnf_min):
                 prior = pixel_ts["updated_bayts"][t - 1]
                 likelihood = pixel_ts["updated_bayts"][t]
                 posterior = calc_posterior(prior, likelihood)
-                pixel_ts["updated_bayts"][t] = posterior # in the next time step, if it is reached, the posterior will be the prior
+                pixel_ts["updated_bayts"][
+                    t
+                ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
                 if posterior < cpnf_min:
                     # if the previously flagged observation gets posterior computed and it is below the
-                    # threshold, we unflag it and go on to the next possible deforested detection in the 
+                    # threshold, we unflag it and go on to the next possible deforested detection in the
                     # time series.
                     pixel_ts["flagged_change"][t] = False
                     break
