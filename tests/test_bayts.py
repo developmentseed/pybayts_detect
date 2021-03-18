@@ -108,12 +108,13 @@ def test_create_bayts():
 
 
 def test_deseason():
-    from pybayts.bayts import deseason_ts
-    from pybayts.data.io import read_and_stack_tifs
     import numpy as np
     from pandas import read_csv
 
-    s1vv_ts_pix = np.array(read_csv("tests/baytsdata/single_ts_s1vv.csv")['x'])[-16:]
+    from pybayts.bayts import deseason_ts
+    from pybayts.data.io import read_and_stack_tifs
+
+    s1vv_ts_pix = np.array(read_csv("tests/baytsdata/single_ts_s1vv.csv")["x"])[-16:]
 
     folder_vv = "tests/baytsdata/s1vv_tseries/"
 
