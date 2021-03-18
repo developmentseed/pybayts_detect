@@ -7,11 +7,12 @@ References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bay
 
 from typing import Tuple
 
+import numpy as np
 import scipy.stats as stats
 import xarray as xr
 
 
-def stack_merge_cpnf_tseries(
+def merge_cpnf_tseries(
     s1vv_ts,
     lndvi_ts,
     pdf_type_l: Tuple,
@@ -54,51 +55,49 @@ def stack_merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    pnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
-    pnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
+    cpnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
+    cpnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
     lndvi_ts = lndvi_ts.to_dataset()
     s1vv_ts = s1vv_ts.to_dataset()
-    lndvi_ts["pnf_lndvi"] = (["date", "y", "x"], pnf_l)
-    s1vv_ts["pnf_s1vv"] = (["date", "y", "x"], pnf_s)
+    lndvi_ts["cpnf_lndvi"] = (["date", "y", "x"], cpnf_l)
+    s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
     outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
 
 
-def create_bayts_ts(timeseries):
-    """[summary]
+def deseason_ts(
+    timeseries, percentile: float = 0.95, min_v: float = None, max_v: float = None
+):
+    """Deseasonalizes the timeseries in place. This doesn't do any seasonal curve fitting,
+        but instead subtracts a percentile.
 
     Args:
-        timeseries (xr.DataSet): An xarray Dataset containing the two
-            time series and conditional non-forest probabilities.
-        pdf_lst (Tuple): The pdf parameters for calc_cpnf.
-        bwf (tuple, optional): Block wieghting parameters for calc_cpnf.
-            Defaults to (0.1, 0.9).
+        timeseries (xr.DataArray): With dims (date, y, x)
+        percentile (float, optional): the percentile to use to subtract from each raster scene. Defaults to 0.95.
+        min_v ([type], optional): Truncates timeseries while deseasonalizing. Defaults to None.
+        max_v ([type], optional):  Truncates timeseries while deseasonalizing. Defaults to None.
 
     Returns:
-        xr.DataSet: A Dataset containing the original 2 time series and
-            refined conditional non-forest probabilities, or "bayts time
-            series".
+        [type]: Deseasoned timeseries.
     """
-    # refined cpnf for dates with observation of s1vv and lndvi
-    # lines 68-77 jreiche bayts
-    refined_cpnf_two_obs = calc_posterior(
-        timeseries["pnf_s1vv"], timeseries["pnf_lndvi"]
+    if max_v:
+        timeseries = timeseries.where(timeseries > max_v, np.nan, timeseries)
+    if min_v:
+        timeseries = timeseries.where(timeseries < min_v, np.nan, timeseries)
+    # percentiles for each raster scene
+    percentiles = timeseries.quantile(
+        percentile, dim=("x", "y"), interpolation="nearest"
     )
-    timeseries_refined = xr.where(
-        timeseries["pnf_s1vv"].notnull() & timeseries["pnf_lndvi"].notnull(),
-        refined_cpnf_two_obs,
-        timeseries,
-    )
-    nan_s1vv = timeseries_refined["pnf_s1vv"].isnull()
-    refined_s1vv = xr.where(
-        nan_s1vv, timeseries_refined["pnf_lndvi"], timeseries_refined["pnf_s1vv"]
-    )
-    timeseries_refined["pnf_s1vv"] = refined_s1vv
-    return timeseries_refined
+
+    # deseasonalize
+    for i in range(len(timeseries)):
+        timeseries[i] = timeseries[i] - percentiles[i]
+
+    return timeseries
 
 
 def calc_cpnf(
-    time_series,
+    timeseries,
     pdf_type: Tuple,
     forest_dist: Tuple,
     nforest_dist: Tuple,
@@ -138,16 +137,16 @@ def calc_cpnf(
         calc_pnf(ndvi, pdf)
     """
 
-    if len(time_series) > 0:
+    if len(timeseries) > 0:
         # Gaussian pdf (mean and sd)
         if pdf_type[0] == "gaussian":
             # the probability of observing the observation given it is non-forest
             pobs_f = stats.norm.pdf(
-                x=time_series, loc=forest_dist[0], scale=forest_dist[1]
+                x=timeseries, loc=forest_dist[0], scale=forest_dist[1]
             )
         elif pdf_type[0] == "weibull":
             pobs_f = stats.weibull.pdf(
-                x=time_series, shape=forest_dist[0], scale=forest_dist[1]
+                x=timeseries, shape=forest_dist[0], scale=forest_dist[1]
             )
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[0].")
@@ -155,11 +154,11 @@ def calc_cpnf(
         # Weibull pdf (shape and scale), TODO figure out why loc (the mean) wasn't supplied for this distribution
         if pdf_type[1] == "gaussian":
             pobs_nf = stats.norm.pdf(
-                x=time_series, loc=nforest_dist[0], scale=nforest_dist[1]
+                x=timeseries, loc=nforest_dist[0], scale=nforest_dist[1]
             )
         elif pdf_type[1] == "weibull":
             pobs_nf = stats.weibull.pdf(
-                x=time_series, shape=nforest_dist[0], scale=nforest_dist[1]
+                x=timeseries, shape=nforest_dist[0], scale=nforest_dist[1]
             )
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[1].")
@@ -191,3 +190,111 @@ def calc_posterior(prior, likelihood):
     return (prior * likelihood) / (
         (prior * likelihood) + ((1 - prior) * (1 - likelihood))
     )
+
+
+def create_bayts_ts(timeseries):
+    """Calculates the initial conditional non-forest probability time series before iterative bayesian updating.
+
+    Args:
+        timeseries (xr.DataSet): An xarray Dataset containing the two
+            time series and conditional non-forest probabilities for each timeseries.
+
+    Returns:
+        xr.Dataarray: A Datarray containing the refined conditional non-forest probabilities
+        (a single time series). This is the data fusion part of the bayts algorithm.
+    """
+    # refined cpnf for dates with observation of s1vv and lndvi
+    # lines 68-77 jreiche bayts
+    refined_cpnf_two_obs = calc_posterior(
+        timeseries["cpnf_s1vv"], timeseries["cpnf_lndvi"]
+    )
+    # where we have ndvi observations, we want to use the refined cpnf since ndvi is more related to deforestation than backscatter
+    timeseries["cpnf_s1vv_refined"] = xr.where(
+        timeseries["cpnf_s1vv"].notnull() & timeseries["cpnf_lndvi"].notnull(),
+        refined_cpnf_two_obs,
+        timeseries["cpnf_s1vv"],
+    )
+    # where we don't have backscatter but we have ndvi, we want to use ndvi cpnf
+    nan_s1vv = timeseries["cpnf_s1vv_refined"].isnull()
+    bayts = xr.where(
+        nan_s1vv, timeseries["cpnf_lndvi"], timeseries["cpnf_s1vv_refined"]
+    )
+    # any nans left in the output should be from image boundary issues or quality masking
+    return bayts
+
+
+def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
+    """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
+
+    Returns a boolean xarray Dataset with dimensions (date, y, x) and two additional
+        variables besides the bayts timeseries:
+        Non-Forest-Change: where "True" means a change was flagged confirmed as Non-Forest.
+            False means a change was not initially flagged, or was flagged but then
+            unflagged by the iterative bayesian updating.
+        Initial-Flagged-Change: where "True" indicates that the observation initially satisfied
+            the cpnf_min criteria to be flagged as possible change. "False" indicates the
+            observation was never considered as a possible change.
+
+    Args:
+        bayts (xr.DataArray): "bayts" time series created with create_bayts from two time series
+            (vv backscatter and ndvi).
+        chi (float, optional): Threshold of Pchange at which the change is confirmed. Defaults to 0.5.
+        cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
+            observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
+    """
+    assert chi >= cpnf_min  # chi should be greater or equal to the initial criteria
+    assert chi >= 0.5  # chi should be greater than .5
+    bayts.name = "bayts"
+    bayts = bayts.to_dataset()
+    bayts["initial_flag"] = xr.where(bayts["bayts"] > cpnf_min, True, False)
+    bayts["flagged_change"] = xr.where(
+        bayts["bayts"] > cpnf_min, True, False
+    )  # this is updated in the loop
+    bayts["updated_bayts"] = bayts["bayts"]
+    # need to probably figure out a better way to do this than iterating over each pixel ts individually
+    # in a single process. 1 ts per dask process? numba? cython?
+    # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
+    for y in range(len(bayts["y"])):
+        for x in range(len(bayts["x"])):
+            pixel_ts = bayts.isel(y=y, x=x)
+            pixel_ts = update_pixel(pixel_ts, chi, cpnf_min)
+            if pixel_ts.isnull().all():
+                pass
+            else:
+                bayts["updated_bayts"][:, y, x] = pixel_ts["updated_bayts"]
+                bayts["flagged_change"][:, y, x] = pixel_ts["flagged_change"]
+    return bayts
+
+
+def update_pixel(pixel_ts, chi, cpnf_min):
+    """Modifies a single pixel view of a spatial timeseries to update the probabilities.
+
+    Args:
+        pixel_ts (xr.Dataset): An xarray Dataset with a single (date) dimension and 4 variables:
+            the original time series "bayts", the initially flagged nonforest observations "initial_flag",
+            the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
+    """
+    # don't update if all values are nan
+    if pixel_ts.isnull().all():
+        return pixel_ts
+    else:
+        possible_nf_indices = np.argwhere(pixel_ts["initial_flag"])
+        # for each observation, we update it starting from the observation that preceded it
+        for ind in possible_nf_indices:
+            for t in range(ind, len(pixel_ts["date"])):
+                prior = pixel_ts["updated_bayts"][t - 1]
+                likelihood = pixel_ts["updated_bayts"][t]
+                posterior = calc_posterior(prior, likelihood)
+                pixel_ts["updated_bayts"][
+                    t
+                ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
+                if posterior < cpnf_min:
+                    # if the previously flagged observation gets posterior computed and it is below the
+                    # threshold, we unflag it and go on to the next possible deforested detection in the
+                    # time series.
+                    pixel_ts["flagged_change"][t] = False
+                    break
+                else:
+                    if posterior >= chi:
+                        pixel_ts["flagged_change"][t] = True
+                        return pixel_ts

@@ -43,7 +43,6 @@ def read_and_stack_tifs(tif_folder: str, ds: str):
         arr["name"] = i.name
 
         arrs.append(arr.sel({"band": 1}))
-
     ts = xr.concat(arrs, dim="date")
     return ts.sortby("date")
 
