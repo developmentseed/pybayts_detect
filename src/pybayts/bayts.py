@@ -55,18 +55,27 @@ def merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    cpnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
-    cpnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
+    cpnf_l = calc_cpnf(
+        lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l
+    )
+    cpnf_s = calc_cpnf(
+        s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s
+    )
     lndvi_ts = lndvi_ts.to_dataset()
     s1vv_ts = s1vv_ts.to_dataset()
     lndvi_ts["cpnf_lndvi"] = (["date", "y", "x"], cpnf_l)
     s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
-    outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
+    outer_merge_ts = xr.merge(
+        [s1vv_ts, lndvi_ts], join="outer", compat="override"
+    )
     return outer_merge_ts
 
 
 def deseason_ts(
-    timeseries, percentile: float = 0.95, min_v: float = None, max_v: float = None
+    timeseries,
+    percentile: float = 0.95,
+    min_v: float = None,
+    max_v: float = None,
 ):
     """Deseasonalizes the timeseries in place. This doesn't do any seasonal curve fitting,
         but instead subtracts a percentile.
@@ -242,13 +251,16 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
         cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
             observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
     """
-    assert chi >= cpnf_min  # chi should be greater or equal to the initial criteria
+    assert (
+        chi >= cpnf_min
+    )  # chi should be greater or equal to the initial criteria
     assert chi >= 0.5  # chi should be greater than .5
     bayts.name = "bayts"
     bayts = bayts.to_dataset()
     bayts["initial_flag"] = xr.where(bayts["bayts"] > cpnf_min, True, False)
-    bayts["flagged_change"] = xr.where(
-        bayts["bayts"] > cpnf_min, True, False
+    bayts["flagged_change"] = (
+        ("date", "y", "x"),
+        np.full(bayts["initial_flag"].shape, False),
     )  # this is updated in the loop
     bayts["updated_bayts"] = bayts["bayts"]
     # need to probably figure out a better way to do this than iterating over each pixel ts individually
@@ -258,10 +270,11 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
         for x in range(len(bayts["x"])):
             pixel_ts = bayts.isel(y=y, x=x)
             pixel_ts = update_pixel(pixel_ts, chi, cpnf_min)
-            if pixel_ts.isnull().all():
-                pass
+            bayts["updated_bayts"][:, y, x] = pixel_ts["updated_bayts"]
+            if pixel_ts["flagged_change"].any() is False:
+                pass  # no detected change, each obs in this time series stays flagged as False
             else:
-                bayts["updated_bayts"][:, y, x] = pixel_ts["updated_bayts"]
+                # overwrite flagged_change
                 bayts["flagged_change"][:, y, x] = pixel_ts["flagged_change"]
     return bayts
 
@@ -275,7 +288,7 @@ def update_pixel(pixel_ts, chi, cpnf_min):
             the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
     """
     # don't update if all values are nan
-    if pixel_ts.isnull().all():
+    if pixel_ts["updated_bayts"].isnull().all():
         return pixel_ts
     else:
         possible_nf_indices = np.argwhere(pixel_ts["initial_flag"])
@@ -288,13 +301,20 @@ def update_pixel(pixel_ts, chi, cpnf_min):
                 pixel_ts["updated_bayts"][
                     t
                 ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
-                if posterior < cpnf_min:
+                if posterior >= chi:
+                    # if the previously flagged observation gets posterior computed and it is above the
+                    # threshold, we flag it and stop searching this time series for a high confidence
+                    # deforestation event (as determined by chi) deforestation event.
+                    pixel_ts["flagged_change"][t] = True
+                    return pixel_ts
+                elif posterior < cpnf_min or t == len(pixel_ts["date"]):
                     # if the previously flagged observation gets posterior computed and it is below the
-                    # threshold, we unflag it and go on to the next possible deforested detection in the
-                    # time series.
-                    pixel_ts["flagged_change"][t] = False
+                    # threshold or if all possible updates have been made, we unflag it and go on to the
+                    # next possible deforested detection in the time series. Or stop if we are out of
+                    # possible detections
                     break
                 else:
-                    if posterior >= chi:
-                        pixel_ts["flagged_change"][t] = True
-                        return pixel_ts
+                    # If the posterior is greater than the cpnf_min but less than chi,
+                    # we need to keep searching the time series.
+                    pass
+        return pixel_ts  # this is returned if none of the initially flagged observations were confirmed with chi
