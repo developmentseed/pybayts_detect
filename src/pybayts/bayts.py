@@ -268,15 +268,31 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
     for y in range(len(bayts["y"])):
         for x in range(len(bayts["x"])):
-            notnan_mask = ~np.isnan(bayts["bayts"].isel(y=y, x=x).data)
-            pixel_ts = bayts.isel(y=y, x=x)[notnan_mask]
-            pixel_ts = update_pixel(pixel_ts, chi, cpnf_min)
-            bayts["updated_bayts"][:, y, x] = pixel_ts["updated_bayts"]
-            if bool(pixel_ts["flagged_change"].any()) is False:
-                pass  # no detected change, each obs in this time series stays flagged as False
+            notnan_mask = bayts["bayts"].isel(y=y, x=x).notnull()
+            pixel_ts = bayts.isel(y=y, x=x)
+            # we need the date coords as positional integers since xarray doesn't support using
+            # location based indexing to return a view instead of a copy.
+            # we need views to assign updated posterior values to specific dates later.
+            pixel_ts = pixel_ts.assign_coords(
+                date_i=("date", list(range(0, len(pixel_ts.date))))
+            )
+            pixel_ts = pixel_ts.where(notnan_mask, drop=True)
+            # don't update if all values are nan
+            if bool(pixel_ts["updated_bayts"].isnull().all()):
+                pass
             else:
-                # overwrite flagged_change
-                bayts["flagged_change"][:, y, x] = pixel_ts["flagged_change"]
+                pixel_ts = update_pixel(pixel_ts, chi, cpnf_min)
+                # set valid pixels to their update values. we first index by index label then by index location
+                bayts["updated_bayts"].loc[pixel_ts.date][:, y, x] = pixel_ts[
+                    "updated_bayts"
+                ]
+                if bool(pixel_ts["flagged_change"].any()) == True:
+                    bayts["flagged_change"][pixel_ts.date_i, y, x] = pixel_ts[
+                        "flagged_change"
+                    ].astype(
+                        bool
+                    )  # drop=True above makes this float, probably an xarray bug?
+                # otherwise, no detected change, each obs in this time series stays flagged as False
     return bayts
 
 
@@ -288,34 +304,30 @@ def update_pixel(pixel_ts, chi, cpnf_min):
             the original time series "bayts", the initially flagged nonforest observations "initial_flag",
             the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
     """
-    # don't update if all values are nan
-    if bool(pixel_ts["updated_bayts"].isnull().all()):
-        return pixel_ts
-    else:
-        possible_nf_indices = np.argwhere(pixel_ts["initial_flag"].data)
-        # for each observation, we update it starting from the observation that preceded it
-        for ind in possible_nf_indices:
-            for t in range(int(ind), len(pixel_ts["date"])):
-                prior = pixel_ts["updated_bayts"][t - 1]
-                likelihood = pixel_ts["updated_bayts"][t]
-                posterior = calc_posterior(prior, likelihood)
-                pixel_ts["updated_bayts"][
-                    t
-                ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
-                if posterior >= chi:
-                    # if the previously flagged observation gets posterior computed and it is above the
-                    # threshold, we flag it and stop searching this time series for a high confidence
-                    # deforestation event (as determined by chi) deforestation event.
-                    pixel_ts["flagged_change"][t] = True
-                    return pixel_ts
-                elif posterior < cpnf_min or t == len(pixel_ts["date"]):
-                    # if the previously flagged observation gets posterior computed and it is below the
-                    # threshold or if all possible updates have been made, we unflag it and go on to the
-                    # next possible deforested detection in the time series. Or stop if we are out of
-                    # possible detections
-                    break
-                else:
-                    # If the posterior is greater than the cpnf_min but less than chi,
-                    # we need to keep searching the time series.
-                    pass
-        return pixel_ts  # this is returned if none of the initially flagged observations were confirmed with chi
+    possible_nf_indices = np.argwhere(pixel_ts["initial_flag"].data)
+    # for each observation, we update it starting from the observation and it's next future neighbor
+    for ind in possible_nf_indices:
+        for t in range(int(ind) + 1, len(pixel_ts["date"])):
+            prior = pixel_ts["updated_bayts"][t - 1]
+            likelihood = pixel_ts["updated_bayts"][t]
+            posterior = calc_posterior(prior, likelihood)
+            pixel_ts["updated_bayts"][
+                t
+            ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
+            if posterior >= chi:
+                # if the previously flagged observation gets posterior computed and it is above the
+                # threshold, we flag it and stop searching this time series for a high confidence
+                # deforestation event (as determined by chi) deforestation event.
+                pixel_ts["flagged_change"][t] = True
+                return pixel_ts
+            elif posterior < cpnf_min or t == len(pixel_ts["date"]):
+                # if the previously flagged observation gets posterior computed and it is below the
+                # threshold or if all possible updates have been made, we unflag it and go on to the
+                # next possible deforested detection in the time series. Or stop if we are out of
+                # possible detections
+                break
+            else:
+                # If the posterior is greater than the cpnf_min but less than chi,
+                # we need to keep searching the time series.
+                pass
+    return pixel_ts  # this is returned if none of the initially flagged observations were confirmed with chi
