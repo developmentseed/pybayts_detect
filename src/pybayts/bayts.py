@@ -268,10 +268,11 @@ def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
     for y in range(len(bayts["y"])):
         for x in range(len(bayts["x"])):
-            pixel_ts = bayts.isel(y=y, x=x)
+            notnan_mask = ~np.isnan(bayts["bayts"].isel(y=y, x=x).data)
+            pixel_ts = bayts.isel(y=y, x=x)[notnan_mask]
             pixel_ts = update_pixel(pixel_ts, chi, cpnf_min)
             bayts["updated_bayts"][:, y, x] = pixel_ts["updated_bayts"]
-            if pixel_ts["flagged_change"].any() is False:
+            if bool(pixel_ts["flagged_change"].any()) is False:
                 pass  # no detected change, each obs in this time series stays flagged as False
             else:
                 # overwrite flagged_change
@@ -288,13 +289,13 @@ def update_pixel(pixel_ts, chi, cpnf_min):
             the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
     """
     # don't update if all values are nan
-    if pixel_ts["updated_bayts"].isnull().all():
+    if bool(pixel_ts["updated_bayts"].isnull().all()):
         return pixel_ts
     else:
-        possible_nf_indices = np.argwhere(pixel_ts["initial_flag"])
+        possible_nf_indices = np.argwhere(pixel_ts["initial_flag"].data)
         # for each observation, we update it starting from the observation that preceded it
         for ind in possible_nf_indices:
-            for t in range(ind, len(pixel_ts["date"])):
+            for t in range(int(ind), len(pixel_ts["date"])):
                 prior = pixel_ts["updated_bayts"][t - 1]
                 likelihood = pixel_ts["updated_bayts"][t]
                 posterior = calc_posterior(prior, likelihood)
