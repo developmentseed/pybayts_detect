@@ -16,17 +16,23 @@ Why does this file exist, and why not put this in __main__?
 """
 import click
 
+from pybayts.bayts import bayts_to_date_array
+from pybayts.bayts import bayts_update
 from pybayts.bayts import create_bayts_ts
 from pybayts.bayts import deseason_ts
-from pybayts.bayts import bayts_update
 from pybayts.bayts import merge_cpnf_tseries
 from pybayts.data.io import read_and_stack_tifs
 
 
 @click.command()
 def main():
-    folder_vv = "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/s1vv_tseries/"
-    folder_ndvi = "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/lndvi_tseries/"
+    """Main function for cli."""
+    folder_vv = (
+        "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/s1vv_tseries/"
+    )
+    folder_ndvi = (
+        "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/lndvi_tseries/"
+    )
     pdf_type_l = ("gaussian", "gaussian")
     pdf_forest_l = (0, 0.1)  # mean and sd
     pdf_nonforest_l = (-0.5, 0.125)  # mean and sd
@@ -60,7 +66,9 @@ def main():
 
     bayts = create_bayts_ts(cpnf_ts)
 
-    ibayts = iterative_bays_update(bayts, chi=0.5, cpnf_min=0.5)
+    ibayts = bayts_update(bayts, chi=0.5, cpnf_min=0.5)
+
+    date_index_arr, actual_dates = bayts_to_date_array(ibayts)
 
 
 if __name__ == "__main__":

@@ -57,19 +57,13 @@ def merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    cpnf_l = calc_cpnf(
-        lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l
-    )
-    cpnf_s = calc_cpnf(
-        s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s
-    )
+    cpnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
+    cpnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
     lndvi_ts = lndvi_ts.to_dataset()
     s1vv_ts = s1vv_ts.to_dataset()
     lndvi_ts["cpnf_lndvi"] = (["date", "y", "x"], cpnf_l)
     s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
-    outer_merge_ts = xr.merge(
-        [s1vv_ts, lndvi_ts], join="outer", compat="override"
-    )
+    outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
 
 
@@ -253,9 +247,7 @@ def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
         cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
             observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
     """
-    assert (
-        chi >= cpnf_min
-    )  # chi should be greater or equal to the initial criteria
+    assert chi >= cpnf_min  # chi should be greater or equal to the initial criteria
     assert chi >= 0.5  # chi should be greater than .5
     bayts.name = "bayts"
     bayts = bayts.to_dataset()
@@ -347,7 +339,7 @@ def bayts_to_date_array(bayts_result):
 
     Returns:
         (np.array, np.array): A tuple containing an integer 2D numpy array with indices. These indices
-            correspond to the second numpy array, which lists the detected dates.
+            correspond to the second numpy array, which lists the detected dates. The "1" index maps to the 0 position.
     """
     date_coords = np.argwhere(bayts_result["flagged_change"].data)
     coord_df = pd.DataFrame(date_coords, columns=["date", "y", "x"])
@@ -355,11 +347,14 @@ def bayts_to_date_array(bayts_result):
     y_c = coord_df.y.values
     x_c = coord_df.x.values
     date_data = bayts_result["flagged_change"]["date"][date_c].values
+    # sparse.coo_matrix does not populate with NaN where there ar enot dates, it populates with 0s.
+    # so we need to use 1 indexing here
 
-    date_indices = [i for i, d in enumerate(date_data)]
+    date_indices = [i + 1 for i, d in enumerate(date_data)]
 
     date_index_array = coo_matrix(
         (date_indices, (y_c, x_c)),
         shape=bayts_result["flagged_change"].shape[-2:],
+        dtype=float,
     ).toarray()
     return date_index_array, date_data
