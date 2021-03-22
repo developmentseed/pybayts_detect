@@ -15,12 +15,11 @@ Why does this file exist, and why not put this in __main__?
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
 import click
-from pybayts.bayts import (
-    merge_cpnf_tseries,
-    deseason_ts,
-    create_bayts_ts,
-    iterative_bays_update,
-)
+
+from pybayts.bayts import create_bayts_ts
+from pybayts.bayts import deseason_ts
+from pybayts.bayts import bayts_update
+from pybayts.bayts import merge_cpnf_tseries
 from pybayts.data.io import read_and_stack_tifs
 
 

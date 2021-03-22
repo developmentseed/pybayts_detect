@@ -8,6 +8,7 @@ References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bay
 from typing import Tuple
 
 import numpy as np
+import pandas as pd
 import scipy.stats as stats
 import xarray as xr
 from scipy.sparse import coo_matrix
@@ -287,7 +288,7 @@ def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
                 bayts["updated_bayts"].loc[pixel_ts.date][:, y, x] = pixel_ts[
                     "updated_bayts"
                 ]
-                if bool(pixel_ts["flagged_change"].any()) == True:
+                if bool(pixel_ts["flagged_change"].any()):
                     bayts["flagged_change"][pixel_ts.date_i, y, x] = pixel_ts[
                         "flagged_change"
                     ].astype(
