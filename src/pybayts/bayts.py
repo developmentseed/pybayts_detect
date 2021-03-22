@@ -10,6 +10,7 @@ from typing import Tuple
 import numpy as np
 import scipy.stats as stats
 import xarray as xr
+from scipy.sparse import coo_matrix
 
 
 def merge_cpnf_tseries(
@@ -232,7 +233,7 @@ def create_bayts_ts(timeseries):
     return bayts
 
 
-def iterative_bays_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
+def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
 
     Returns a boolean xarray Dataset with dimensions (date, y, x) and two additional
@@ -331,3 +332,33 @@ def update_pixel(pixel_ts, chi, cpnf_min):
                 # we need to keep searching the time series.
                 pass
     return pixel_ts  # this is returned if none of the initially flagged observations were confirmed with chi
+
+
+def bayts_to_date_array(bayts_result):
+    """Processes result from bayts_update, returning array of dates of
+        flagged change for the aoi.
+
+    Args:
+        bayts_result (xarray.Dataset): The result from bayts_update, containing the variables:
+            flagged_change: a boolean array where True represents deforestation detected at confidence above chi
+            updated_bayts: the confidence scores/probabilities that an observation is deforested.
+            bayts: the original, initial probabilities. Unused in this function and useful for debugging.
+
+    Returns:
+        (np.array, np.array): A tuple containing an integer 2D numpy array with indices. These indices
+            correspond to the second numpy array, which lists the detected dates.
+    """
+    date_coords = np.argwhere(bayts_result["flagged_change"].data)
+    coord_df = pd.DataFrame(date_coords, columns=["date", "y", "x"])
+    date_c = coord_df.date.values
+    y_c = coord_df.y.values
+    x_c = coord_df.x.values
+    date_data = bayts_result["flagged_change"]["date"][date_c].values
+
+    date_indices = [i for i, d in enumerate(date_data)]
+
+    date_index_array = coo_matrix(
+        (date_indices, (y_c, x_c)),
+        shape=bayts_result["flagged_change"].shape[-2:],
+    ).toarray()
+    return date_index_array, date_data
