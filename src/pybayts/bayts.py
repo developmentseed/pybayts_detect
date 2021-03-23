@@ -5,6 +5,8 @@ Implemented in python by: Development Seed
 References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bayesian Approach to Combine Landsat and ALOS PALSAR Time Series for Near Real-Time Deforestation Detection. Remote Sensing. 7(5), 4973-4996; doi:10.3390/rs70504973}
 """
 
+import time
+from datetime import datetime
 from typing import Tuple
 
 import numpy as np
@@ -12,8 +14,6 @@ import pandas as pd
 import scipy.stats as stats
 import xarray as xr
 from scipy.sparse import coo_matrix
-from datetime import datetime
-import time
 
 
 def merge_cpnf_tseries(
@@ -59,19 +59,13 @@ def merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    cpnf_l = calc_cpnf(
-        lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l
-    )
-    cpnf_s = calc_cpnf(
-        s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s
-    )
+    cpnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
+    cpnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
     lndvi_ts = lndvi_ts.to_dataset()
     s1vv_ts = s1vv_ts.to_dataset()
     lndvi_ts["cpnf_lndvi"] = (["date", "y", "x"], cpnf_l)
     s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
-    outer_merge_ts = xr.merge(
-        [s1vv_ts, lndvi_ts], join="outer", compat="override"
-    )
+    outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
 
 
@@ -255,9 +249,7 @@ def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
         cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
             observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
     """
-    assert (
-        chi >= cpnf_min
-    )  # chi should be greater or equal to the initial criteria
+    assert chi >= cpnf_min  # chi should be greater or equal to the initial criteria
     assert chi >= 0.5  # chi should be greater than .5
     bayts.name = "bayts"
     bayts = bayts.to_dataset()
@@ -384,7 +376,11 @@ def bayts_to_date_array(bayts_result):
         shape=bayts_result["flagged_change"].shape[-2:],
         dtype=float,
     ).toarray()
-    return date_index_arr, date_data, decimal_yrs_arr
+    return (
+        date_index_arr,
+        date_data,
+        np.where(decimal_yrs_arr == 0, np.nan, decimal_yrs_arr),
+    )
 
 
 def to_year_fraction(date):
