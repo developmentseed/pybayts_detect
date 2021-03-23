@@ -28,6 +28,7 @@ inst_reqs = [
     "bfast>=0.6.0",
     "xarray>=0.17",
     "rioxarray>=0.3.1",
+    "seaborn>=0.11.1",
 ]
 
 
