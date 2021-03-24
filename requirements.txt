@@ -3,3 +3,5 @@ bfast>=0.6.0
 xarray>=0.17
 rioxarray>=.0.3.1
 seaborn>=0.11.1
+rio-cogeo==2.0.1
+riotiler==2.0.3
