@@ -25,10 +25,17 @@ def read(*names, **kwargs):
 
 inst_reqs = [
     "click",
-    "bfast>=0.6.0",
-    "xarray>=0.17",
-    "rioxarray>=0.3.1",
-    "seaborn>=0.11.1",
+    "rioxarray>=.0.3.1",
+    "seaborn",
+    "geopandas",
+    "geocube",
+    "iteration_utilities>=-0.11.0",
+    "scipy",
+    # "rio-cogeo==2.1",
+    # "cogeo-mosaic==3.0.0rc1",
+    # "rio-tiler==2.0.3",
+    # "titiler==0.1.0",
+    # "attrs==20.3",
 ]
 
 

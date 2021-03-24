@@ -2,14 +2,11 @@ from typing import List
 import os
 import pandas as pd
 import rioxarray as rio
-import xarray as xr
 from iteration_utilities import groupedby
-import numpy as np
-import rasterio
 import json
 import geopandas as gpd
 from geocube.api.core import make_geocube
-
+from .qa import Collection2_QAValues, pixel_to_qa
 
 def get_scene_paths(csv_path: str):
     """Get scene paths to tif files.
@@ -51,11 +48,17 @@ def scene_id_to_ndvi_arr(outdir: str, b4_path: str, b5_path: str) -> str:
 
     calc_ndvi = (nir - red) / (nir + red)
     ndvi_path = os.path.join(outdir, scene_id_b4 + "_NDVI.tif")
-
-    calc_ndvi.to_raster(ndvi_path)
-
+    qa_path = b4_path.split("SR_B4")[0]+"QA_PIXEL.TIF" + "?" + b4_path.split("?")[1]
+    clear_mask = get_clear_qa_mask(qa_path)
+    calc_ndvi.where(clear_mask).rio.to_raster(ndvi_path)
     return ndvi_path
 
+def get_clear_qa_mask(qa_path):
+    qa = rio.open_rasterio(qa_path)
+    qa = qa.rio.set_nodata(1)
+    qa = qa.sel(band=1)
+    mask = pixel_to_qa(qa.values, QAValues=Collection2_QAValues)
+    return mask == Collection2_QAValues.Clear.value['out']
 
 def groupby_date(scenes: List[str]) -> List[List]:
     """Takes a list of scenes, groups them by date.
