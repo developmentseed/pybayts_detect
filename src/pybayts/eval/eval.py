@@ -58,8 +58,7 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         
     Returns:
         Printed confusion matrices and F1 scores for each year in the study period.
-    """
-    groundtruth= rx.open_rasterio(groundtruth)
+    """ 
     
     decimal_yr_arr_years = np.unique(decimal_yr_arr.astype(np.uint16))
     
@@ -81,11 +80,11 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         match_years = set(year_gt_list) & set(year_pr_list)
         
         for year in match_years:
-            groundtruth= rx.open_rasterio(groundtruth)
-            groundtruth = groundtruth.copy()
-            groundtruth = groundtruth  > cl
+            groundtruth_arr = rx.open_rasterio(groundtruth)
+            groundtruth_arr = groundtruth_arr.copy()
+            groundtruth_arr = groundtruth_arr  > cl
         
-            groundtruth_flat = groundtruth.values.flatten()
+            groundtruth_flat = groundtruth_arr.values.flatten()
             decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
             
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
@@ -110,10 +109,11 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         match_years = set(year_gt_list) & set(year_pr_list)
         
         for year in match_years:
-            groundtruth = groundtruth.copy()
-            groundtruth = groundtruth  > cl
+            groundtruth_arr = rx.open_rasterio(groundtruth)
+            groundtruth_arr = groundtruth_arr.copy()
+            groundtruth_arr = groundtruth_arr  > cl
         
-            groundtruth_flat = groundtruth.values.flatten()
+            groundtruth_flat = groundtruth_arr.values.flatten()
             decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
             
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
