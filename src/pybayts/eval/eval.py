@@ -44,13 +44,13 @@ def generate_f1(flat_groundtruth, flat_decimal_yr_arr, year):
     """
     
     f1 = f1_score(flat_groundtruth, flat_decimal_yr_arr, average='macro')
-    print(f"F1 score for {year}:", cm)
+    print(f"F1 score for {year}:", f1)
     return f1
 
 def evaluate(groundtruth, decimal_yr_arr, aoi_name):
     """Evaluate co-registered reference and bayts inference data using confusion matrix and F1 score.
     Args:
-        groundtruth (str): the path for the clipped reference image
+        groundtruth (str): rioxarray of clipped reference image (may need to run reproject match against a sample time series mosaic for the AOI)
         
         decimal_yr_arr (array): array of boolean values where [True = change, False = no change]
         
@@ -58,7 +58,7 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         
     Returns:
         Printed confusion matrices and F1 scores for each year in the study period.
-    """ 
+    """
     
     decimal_yr_arr_years = np.unique(decimal_yr_arr.astype(np.uint16))
     
@@ -79,9 +79,11 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         
         match_years = set(year_gt_list) & set(year_pr_list)
         
+        print("year_gt_list, year_pr_list: ", year_gt_list, year_pr_list)
+        print("match_years: ", match_years)
+        
         for year in match_years:
-            groundtruth_arr = rx.open_rasterio(groundtruth)
-            groundtruth_arr = groundtruth_arr.copy()
+            groundtruth_arr = groundtruth.copy()
             groundtruth_arr = groundtruth_arr  > cl
         
             groundtruth_flat = groundtruth_arr.values.flatten()
@@ -90,6 +92,7 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
             assert(cm.shape == (2, 2))
             f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
+
     else:
         # aoi is either DRC or Indonesia
         # Global Forest Watch ground truth years
@@ -107,14 +110,17 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
             year_pr_list.append(yr)
         
         match_years = set(year_gt_list) & set(year_pr_list)
+        print("match_years: ", match_years)
         
         for year in match_years:
-            groundtruth_arr = rx.open_rasterio(groundtruth)
-            groundtruth_arr = groundtruth_arr.copy()
+            groundtruth_arr = groundtruth.copy()
             groundtruth_arr = groundtruth_arr  > cl
         
             groundtruth_flat = groundtruth_arr.values.flatten()
             decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
+            decimal_yr_arr_flat = decimal_yr_arr_flat.astype(bool)
+            
+            print("unique values in groundtruth_flat, decimal_yr_arr_flat: ", np.unique(groundtruth_flat), np.unique(decimal_yr_arr_flat))
             
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
             assert(cm.shape == (2, 2))
