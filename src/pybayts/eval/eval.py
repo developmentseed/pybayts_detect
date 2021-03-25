@@ -83,6 +83,9 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         print("match_years: ", match_years)
         
         for year in match_years:
+
+            cl = list(class_year_dict.keys())[list(class_year_dict.values()).index(year)]
+
             groundtruth_arr = groundtruth.copy()
             groundtruth_arr = groundtruth_arr  > cl
         
@@ -113,6 +116,9 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         print("match_years: ", match_years)
         
         for year in match_years:
+
+            cl = list(class_year_dict.keys())[list(class_year_dict.values()).index(year)]
+
             groundtruth_arr = groundtruth.copy()
             groundtruth_arr = groundtruth_arr  > cl
         
