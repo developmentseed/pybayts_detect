@@ -47,7 +47,7 @@ def generate_f1(flat_groundtruth, flat_decimal_yr_arr, year):
     print(f"F1 score for {year}:", cm)
     return f1
 
-def evalulate(groundtruth, decimal_yr_arr, aoi_name):
+def evaluate(groundtruth, decimal_yr_arr, aoi_name):
     """Evaluate co-registered reference and bayts inference data using confusion matrix and F1 score.
     Args:
         groundtruth (str): the path for the clipped reference image
