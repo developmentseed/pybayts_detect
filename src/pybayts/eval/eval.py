@@ -50,7 +50,7 @@ def generate_f1(flat_groundtruth, flat_decimal_yr_arr, year):
 def evaluate(groundtruth, decimal_yr_arr, aoi_name):
     """Evaluate co-registered reference and bayts inference data using confusion matrix and F1 score.
     Args:
-        groundtruth (str): rioxarray of clipped reference image (may need to run reproject match against a sample time series mosaic for the AOI)
+        groundtruth (xarray): rioxarray of clipped reference image (may need to run reproject match against a sample time series mosaic for the AOI)
         
         decimal_yr_arr (array): array of boolean values where [True = change, False = no change]
         
