@@ -89,6 +89,7 @@ def evalulate(groundtruth, decimal_yr_arr, aoi_name):
             decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
             
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
+            assert(cm.shape == (2, 2))
             f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
     else:
         # aoi is either DRC or Indonesia
@@ -116,5 +117,6 @@ def evalulate(groundtruth, decimal_yr_arr, aoi_name):
             decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
             
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
+            assert(cm.shape == (2, 2))
             f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
 
