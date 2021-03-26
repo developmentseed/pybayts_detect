@@ -2,12 +2,13 @@ from typing import List
 import os
 import pandas as pd
 import rioxarray as rio
+from rioxarray.merge import merge_arrays
 from iteration_utilities import groupedby
 import json
 import geopandas as gpd
 from geocube.api.core import make_geocube
 from .qa import Collection2_QAValues, pixel_to_qa
-
+import time
 def get_scene_paths(csv_path: str):
     """Get scene paths to tif files.
 
@@ -38,27 +39,30 @@ def scene_id_to_ndvi_arr(outdir: str, b4_path: str, b5_path: str) -> str:
     Returns:
         str: The path to the NDVI .tif
     """
+    start = time.time()
     # confirm scene ids are the same
     assert "B4" in b4_path
     assert "B5" in b5_path
     scene_id_b4 = b4_path.split("/")[-2]
     assert scene_id_b4 == b5_path.split("/")[-2]
-    red = rio.open_rasterio(b4_path, masked=True)  # red
-    nir = rio.open_rasterio(b5_path, masked=True)  # near infrared
-
-    calc_ndvi = (nir - red) / (nir + red)
-    ndvi_path = os.path.join(outdir, scene_id_b4 + "_NDVI.tif")
-    qa_path = b4_path.split("SR_B4")[0]+"QA_PIXEL.TIF" + "?" + b4_path.split("?")[1]
-    clear_mask = get_clear_qa_mask(qa_path)
-    calc_ndvi.where(clear_mask).rio.to_raster(ndvi_path)
-    return ndvi_path
+    # attempting to take advantage of COG internal tiling
+    # page 4 says its 256x256
+    # https://prd-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/atoms/files/LSDS-1388-Landsat-Cloud-Optimized-GeoTIFF_DFCB-v2.0.pdf
+    # https://corteva.github.io/rioxarray/stable/examples/read-locks.html
+    with rio.open_rasterio(b4_path, masked=True, lock=False, chunks=(1, "auto", -1)) as red, rio.open_rasterio(b5_path, masked=True, lock=False, chunks=(1, "auto", -1)) as nir:
+        calc_ndvi = (nir - red) / (nir + red)
+        ndvi_path = os.path.join(outdir, scene_id_b4 + "_NDVI.tif")
+        qa_path = b4_path.split("SR_B4")[0]+"QA_PIXEL.TIF" + "?" + b4_path.split("?")[1]
+        clear_mask = get_clear_qa_mask(qa_path)
+        calc_ndvi.where(clear_mask).rio.to_raster(ndvi_path)
+        return ndvi_path, time.time() - start
 
 def get_clear_qa_mask(qa_path):
-    qa = rio.open_rasterio(qa_path)
-    qa = qa.rio.set_nodata(1)
-    qa = qa.sel(band=1)
-    mask = pixel_to_qa(qa.values, QAValues=Collection2_QAValues)
-    return mask == Collection2_QAValues.Clear.value['out']
+    with rio.open_rasterio(qa_path, lock=False, chunks=(1, "auto", -1)) as qa:
+        qa = qa.rio.set_nodata(1)
+        qa = qa.sel(band=1)
+        mask = pixel_to_qa(qa.values, QAValues=Collection2_QAValues)
+        return mask == Collection2_QAValues.Clear.value['out']
 
 def groupby_date(scenes: List[str]) -> List[List]:
     """Takes a list of scenes, groups them by date.
@@ -76,6 +80,8 @@ def groupby_date(scenes: List[str]) -> List[List]:
         group_dict = groupedby(scenes, key=lambda x: x[111:119])
     elif "IW_GRD" in scenes[0]:
         group_dict = groupedby(scenes, key=lambda x: x[17:25])
+    elif "NDVI" in scenes[0]:
+        group_dict = groupedby(scenes, key=lambda x: x[72:-24])
     return group_dict
 
 
@@ -105,9 +111,9 @@ def open_merge_per_date(paths: List[str]):
     for p in paths:
         arr = rio.open_rasterio(p)
         arrs.append(arr)
-    name = arr.name
-    merged = rio.merge.merge_arrays(arrs)
-    merged.name = "merged_" + name
+    merged = merge_arrays(arrs)
+    # day is exact, other info plike path row in the name is not since it's been merged
+    merged.name = "merged_" + p.split("/")[-1]
     return merged
 
 
@@ -123,6 +129,7 @@ def merge_each_date(date_group_dict, aoi_grid, outfolder):
         str: The path to the merged rasters, or just the single raster if there is only one for
          that particular date.
     """
+    outpaths = []
     for date, group in date_group_dict.items():
         if len(group) > 1:
             merged_date_arr = open_merge_per_date(group)
@@ -131,8 +138,8 @@ def merge_each_date(date_group_dict, aoi_grid, outfolder):
             merged_date_arr.name = group[0]
         outpath = os.path.join(outfolder, merged_date_arr.name)
         merged_date_arr = reproject_match_to_aoi(merged_date_arr, aoi_grid)
-        merged_date_arr.to_raster(outpath)
-        return outpath
+        merged_date_arr.rio.to_raster(outpath)
+        outpaths.append(outpath)
 
 
 def reproject_match_to_aoi(da, match_da):
