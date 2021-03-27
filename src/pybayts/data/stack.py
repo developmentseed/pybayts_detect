@@ -9,6 +9,11 @@ import geopandas as gpd
 from geocube.api.core import make_geocube
 from .qa import Collection2_QAValues, pixel_to_qa
 import time
+from pathlib import Path
+from itertools import islice
+import re
+
+
 def get_scene_paths(csv_path: str):
     """Get scene paths to tif files.
 
@@ -20,7 +25,7 @@ def get_scene_paths(csv_path: str):
         list of scene paths on an azure file storage container.
     """
     scenes = pd.read_csv(csv_path)
-    if "GRD" in csv_path:
+    if "GRD" in csv_path or "asf_search" in csv_path:
         scenes = scenes["Granule Name"].tolist()
     elif "ls8" in csv_path:
         scenes = scenes["azure_path"].tolist()
@@ -49,20 +54,31 @@ def scene_id_to_ndvi_arr(outdir: str, b4_path: str, b5_path: str) -> str:
     # page 4 says its 256x256
     # https://prd-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/atoms/files/LSDS-1388-Landsat-Cloud-Optimized-GeoTIFF_DFCB-v2.0.pdf
     # https://corteva.github.io/rioxarray/stable/examples/read-locks.html
-    with rio.open_rasterio(b4_path, masked=True, lock=False, chunks=(1, "auto", -1)) as red, rio.open_rasterio(b5_path, masked=True, lock=False, chunks=(1, "auto", -1)) as nir:
+    with rio.open_rasterio(
+        b4_path, masked=True, lock=False, chunks=(1, "auto", -1)
+    ) as red, rio.open_rasterio(
+        b5_path, masked=True, lock=False, chunks=(1, "auto", -1)
+    ) as nir:
         calc_ndvi = (nir - red) / (nir + red)
         ndvi_path = os.path.join(outdir, scene_id_b4 + "_NDVI.tif")
-        qa_path = b4_path.split("SR_B4")[0]+"QA_PIXEL.TIF" + "?" + b4_path.split("?")[1]
+        qa_path = (
+            b4_path.split("SR_B4")[0]
+            + "QA_PIXEL.TIF"
+            + "?"
+            + b4_path.split("?")[1]
+        )
         clear_mask = get_clear_qa_mask(qa_path)
         calc_ndvi.where(clear_mask).rio.to_raster(ndvi_path)
         return ndvi_path, time.time() - start
+
 
 def get_clear_qa_mask(qa_path):
     with rio.open_rasterio(qa_path, lock=False, chunks=(1, "auto", -1)) as qa:
         qa = qa.rio.set_nodata(1)
         qa = qa.sel(band=1)
         mask = pixel_to_qa(qa.values, QAValues=Collection2_QAValues)
-        return mask == Collection2_QAValues.Clear.value['out']
+        return mask == Collection2_QAValues.Clear.value["out"]
+
 
 def groupby_date(scenes: List[str]) -> List[List]:
     """Takes a list of scenes, groups them by date.
@@ -112,8 +128,6 @@ def open_merge_per_date(paths: List[str]):
         arr = rio.open_rasterio(p)
         arrs.append(arr)
     merged = merge_arrays(arrs)
-    # day is exact, other info plike path row in the name is not since it's been merged
-    merged.name = "merged_" + p.split("/")[-1]
     return merged
 
 
@@ -129,17 +143,21 @@ def merge_each_date(date_group_dict, aoi_grid, outfolder):
         str: The path to the merged rasters, or just the single raster if there is only one for
          that particular date.
     """
-    outpaths = []
     for date, group in date_group_dict.items():
-        if len(group) > 1:
-            merged_date_arr = open_merge_per_date(group)
+        fname = group[0].split("/")[-1]
+        outpath = os.path.join(outfolder, fname)
+        if os.path.exists(outpath):
+            pass
         else:
-            merged_date_arr = rio.open_rasterio(group[0])
-            merged_date_arr.name = group[0]
-        outpath = os.path.join(outfolder, merged_date_arr.name)
-        merged_date_arr = reproject_match_to_aoi(merged_date_arr, aoi_grid)
-        merged_date_arr.rio.to_raster(outpath)
-        outpaths.append(outpath)
+            if len(group) > 1:
+                merged_date_arr = open_merge_per_date(group)
+            else:
+                merged_date_arr = rio.open_rasterio(group[0])
+            merged_date_arr = reproject_match_to_aoi(merged_date_arr, aoi_grid)
+            # day is exact, other info plike path row in the name is not since it's been merged
+            merged_date_arr.name = group[0].split("/")[-1]
+            merged_date_arr.rio.to_raster(outpath)
+    return list(Path(outfolder).glob("*"))
 
 
 def reproject_match_to_aoi(da, match_da):
@@ -158,3 +176,63 @@ def reproject_match_to_aoi(da, match_da):
     """
 
     return da.rio.reproject_match(match_da)
+
+
+def get_SAFE_id(logfile: str) -> str:
+    """Parses the ASF log file to get the SAFE formatted file name for matching with aoi granule names.
+
+    Args:
+        logfile (str): Path to log file.
+
+    Returns:
+        str: The file id (without .SAFE extension)
+    """
+    with open(logfile) as myfile:
+        content = list(islice(myfile, 2))[1]
+    return (
+        re.search(
+            r"SAFE\s+directory(?:(?!\.SAFE)(?:.|\n))*\.SAFE",
+            content,
+            re.DOTALL,
+        )
+        .group()
+        .split(": ")[-1]
+        .split(".SAFE")[0]
+    )
+
+
+def sentinel_paths_for_aoi_csv(
+    sentinel_names_csv: List,
+    sentinel_folders_azure: List,
+    path_file_name: str,
+) -> List[str]:
+    """Gets the Sentinel paths on Azure given a granule list in csv format.
+
+    The log files on azure need to be parsed to get matched to the granule ids in the granule list.
+    The script can take a bit the first time it is run since parsing log file takes some seconds.
+
+    Args:
+        sentinel_names_csv (List): Granule ids in csv. This can be the csv used to order the data for an aoi with ASF vertex.
+        sentinel_folders_azure (List): The list of all folders on Azure.
+        path_file_name (str): Name of csv file to save out the paths to vv file son azure that correspond to a csv/aoi.
+
+    Returns:
+        List[str]: List of VV.tif file paths.
+    """
+    if os.path.exists(path_file_name):
+        vvpdf = pd.read_csv(path_file_name)
+        return vvpdf["0"].tolist()
+    else:
+        vvpaths = []
+        for azure_folder_path in tqdm(sentinel_folders_azure):
+            logfile_path = list(azure_folder_path.glob("*.log"))[0]
+            safe_id_azure_log = get_SAFE_id(logfile_path)
+            for safe_id_csv in sentinel_names_csv:
+                if safe_id_azure_log == safe_id_csv:
+                    vvpath = os.path.join(
+                        azure_folder_path,
+                        str(azure_folder_path).split("/")[-1] + "_VV.tif",
+                    )
+                    vvpaths.append(vvpath)
+        pd.DataFrame(vvpaths).to_csv(path_file_name)
+        return vvpaths
