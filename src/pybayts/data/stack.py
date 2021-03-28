@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import rioxarray as rio
 from rioxarray.merge import merge_arrays
+import xarray as xr
 from iteration_utilities import groupedby
 import json
 import geopandas as gpd
@@ -12,6 +13,76 @@ import time
 from pathlib import Path
 from itertools import islice
 import re
+from datetime import datetime
+from geocube.api.core import make_geocube
+from pathlib import Path
+from tqdm import tqdm
+
+
+def create_two_timeseries(
+    landsat_csv,
+    sentinel_csv,
+    sentinel_aoi_csv_path,
+    geojson_p,
+    aoi_EPSG,
+    sentinel_in_folder,
+    l8_ndvi_outfolder_dir,
+    l8_merged_ndvi_outfolder_dir,
+    sentinel_merged_outfolder_dir,
+):
+    for i in [
+        l8_ndvi_outfolder_dir,
+        l8_merged_ndvi_outfolder_dir,
+        sentinel_merged_outfolder_dir,
+    ]:
+        if os.path.exists(i) == False:
+            os.makedirs(i)
+
+    sentinel_names = get_scene_paths(sentinel_csv)
+    landsat_paths = get_scene_paths(landsat_csv)
+
+    aoi_gdf = gpd.read_file(geojson_p)
+
+    # utm epsg for brazil since landsat and sentinel in utm
+    aoi_grid_ds = make_geocube(
+        aoi_gdf, output_crs=aoi_EPSG, resolution=(30, 30)
+    )
+
+    liter = iter(landsat_paths)
+    lp_tups = list(zip(liter, liter))
+    ndvi_paths = [str(i) for i in Path(l8_ndvi_outfolder_dir).glob("*")]
+
+    if len(ndvi_paths) == len(lp_tups):
+        pass
+    else:
+        start = time.time()
+        for l8_scene_band_tup in lp_tups:
+            ndvi_path, p_time = scene_id_to_ndvi_arr(
+                l8_ndvi_outfolder_dir,
+                l8_scene_band_tup[0],
+                l8_scene_band_tup[1],
+            )
+            ndvi_paths.append(ndvi_path)
+        print("Total", time.time() - start)
+
+    ndvi_ts = group_merge_stack(
+        ndvi_paths, aoi_grid_ds, l8_merged_ndvi_outfolder_dir, date_index=3
+    )
+
+    sfolders = list(Path(sentinel_in_folder).glob("*"))
+    sentinel_paths = sentinel_paths_for_aoi_csv(
+        sentinel_names,
+        sfolders,
+        sentinel_aoi_csv_path,
+    )
+    s1_ts = group_merge_stack(
+        sentinel_paths,
+        aoi_grid_ds,
+        sentinel_merged_outfolder_dir,
+        date_index=2,
+    )
+
+    return ndvi_ts, s1_ts
 
 
 def get_scene_paths(csv_path: str):
@@ -94,8 +165,8 @@ def groupby_date(scenes: List[str]) -> List[List]:
     """
     if "landsateuwest" in scenes[0]:
         group_dict = groupedby(scenes, key=lambda x: x[111:119])
-    elif "IW_GRD" in scenes[0]:
-        group_dict = groupedby(scenes, key=lambda x: x[17:25])
+    elif "RTC30" in scenes[0]:
+        group_dict = groupedby(scenes, key=lambda x: x[127:135])
     elif "NDVI" in scenes[0]:
         group_dict = groupedby(scenes, key=lambda x: x[72:-24])
     return group_dict
@@ -236,3 +307,21 @@ def sentinel_paths_for_aoi_csv(
                     vvpaths.append(vvpath)
         pd.DataFrame(vvpaths).to_csv(path_file_name)
         return vvpaths
+
+
+def group_merge_stack(paths, aoi_grid_ds, merged_outfolder_dir, date_index=3):
+    date_groups = groupby_date(paths)
+
+    merged_paths = merge_each_date(
+        date_groups, aoi_grid_ds, merged_outfolder_dir
+    )
+
+    arrs = []
+    for p in merged_paths:
+        arr = rio.open_rasterio(str(p), lock=False, chunks=(1, "auto", -1))
+        datestr = str(p).split("/")[-1].split("_")[date_index]
+        dt = datetime(int(datestr[0:4]), int(datestr[4:6]), int(datestr[6:8]))
+        arr["date"] = dt
+        arrs.append(arr.sel({"band": 1}))
+    ts = xr.concat(arrs, dim="date")
+    return ts.sortby("date")
