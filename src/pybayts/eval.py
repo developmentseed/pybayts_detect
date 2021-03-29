@@ -5,7 +5,7 @@ Author: @developmentseed
 
 import numpy as np
 from sklearn.metrics import confusion_matrix, f1_score
-from ..plot import plot_cm
+from .plot import plot_cm
 
 
 def generate_cm(flat_groundtruth, flat_decimal_yr_arr, year):
