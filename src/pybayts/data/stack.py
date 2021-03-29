@@ -156,7 +156,7 @@ def groupby_date(scenes: List[str]) -> List[List]:
     """Takes a list of scenes, groups them by date.
 
     Each group will be merged into a single mosaic for that date if there are
-    more than one scenes in the group.
+    more than one scenes in the group. The file path must contain value specified in conditionals.
 
     Args:
         scenes (List[str]): The output from scene_id_to_ndvi_arr or path to s1 backscatter VV .tif
@@ -164,12 +164,22 @@ def groupby_date(scenes: List[str]) -> List[List]:
     Returns:
         List[List]: A list of lists, where each inner list contains the paths occurring at the same date and aoi.
     """
-    if "landsateuwest" in scenes[0]:
-        group_dict = groupedby(scenes, key=lambda x: x[111:119])
+    if "landsateuwest" in scenes[0] or "l8processed" in scenes[0]:
+        group_dict = groupedby(
+            scenes, key=lambda x: x.split("/")[-1].split("_")[3]
+        )
     elif "RTC30" in scenes[0]:
-        group_dict = groupedby(scenes, key=lambda x: x[127:135])
+        group_dict = groupedby(
+            scenes, key=lambda x: x.split("/")[-1].split("_")[2][0:8]
+        )
     elif "NDVI" in scenes[0]:
-        group_dict = groupedby(scenes, key=lambda x: x[72:-24])
+        group_dict = groupedby(
+            scenes, key=lambda x: x.split("/")[-1].split("_")[3]
+        )
+    else:
+        raise ValueError(
+            "The scene paths do not contain a Landsat or Sentinel-1 identifier sub string."
+        )
     return group_dict
 
 
@@ -180,6 +190,17 @@ def open_geojson(geojson_path):
 
 
 def make_aoi_grid(geojson_path: str, epsg: str = "EPSG:32722"):
+    """Uses geocube package to turn a geojson into a raster grid.
+
+    Timeseries rasters are later reprojected, snapped, and clipped to this grid.
+
+    Args:
+        geojson_path (str):
+        epsg (str, optional): [description]. Defaults to "EPSG:32722".
+
+    Returns:
+        [type]: [description]
+    """
     print(f"Making aoi grid with crs {epsg}")
     aoi_gdf = gpd.read_file(geojson_path)
     # utm epsg for brazil since landsat and sentinel in utm
@@ -223,8 +244,8 @@ def merge_each_date(date_group_dict, aoi_grid, outfolder):
         if os.path.exists(outpath):
             pass
         else:
-            print("Date group: ", group)
             if len(group) > 1:
+                print("Date group: ", group)
                 merged_date_arr = open_merge_per_date(group)
             else:
                 merged_date_arr = rio.open_rasterio(group[0])
