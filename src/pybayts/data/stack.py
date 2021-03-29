@@ -51,10 +51,11 @@ def create_two_timeseries(
     liter = iter(landsat_paths)
     lp_tups = list(zip(liter, liter))
     ndvi_paths = [str(i) for i in Path(l8_ndvi_outfolder_dir).glob("*")]
-
+    print("Computing NDVI and saving...")
     if len(ndvi_paths) == len(lp_tups):
         pass
     else:
+        assert len(ndvi_paths) == 0
         start = time.time()
         for l8_scene_band_tup in lp_tups:
             ndvi_path, p_time = scene_id_to_ndvi_arr(
@@ -179,6 +180,7 @@ def open_geojson(geojson_path):
 
 
 def make_aoi_grid(geojson_path: str, epsg: str = "EPSG:32722"):
+    print(f"Making aoi grid with crs {epsg}")
     aoi_gdf = gpd.read_file(geojson_path)
     # utm epsg for brazil since landsat and sentinel in utm
     aoi_grid_ds = make_geocube(aoi_gdf, output_crs=epsg, resolution=(30, 30))
@@ -214,12 +216,14 @@ def merge_each_date(date_group_dict, aoi_grid, outfolder):
         str: The path to the merged rasters, or just the single raster if there is only one for
          that particular date.
     """
+    print("Merging same date scenes, if any...")
     for date, group in date_group_dict.items():
         fname = group[0].split("/")[-1]
         outpath = os.path.join(outfolder, fname)
         if os.path.exists(outpath):
             pass
         else:
+            print("Date group: ", group)
             if len(group) > 1:
                 merged_date_arr = open_merge_per_date(group)
             else:
@@ -290,7 +294,9 @@ def sentinel_paths_for_aoi_csv(
     Returns:
         List[str]: List of VV.tif file paths.
     """
+    print("Searching for correct Sentinel-1 paths...")
     if os.path.exists(path_file_name):
+        print(f"Using existing paths csv {path_file_name}")
         vvpdf = pd.read_csv(path_file_name)
         return vvpdf["0"].tolist()
     else:
@@ -315,7 +321,7 @@ def group_merge_stack(paths, aoi_grid_ds, merged_outfolder_dir, date_index=3):
     merged_paths = merge_each_date(
         date_groups, aoi_grid_ds, merged_outfolder_dir
     )
-
+    print("Final step, opening and stacking time series...")
     arrs = []
     for p in merged_paths:
         arr = rio.open_rasterio(str(p), lock=False, chunks=(1, "auto", -1))
