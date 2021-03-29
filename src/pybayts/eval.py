@@ -49,7 +49,7 @@ def generate_f1(flat_groundtruth, flat_decimal_yr_arr, year):
     return f1
 
 
-def evaluate(groundtruth, decimal_yr_arr, aoi_name):
+def evaluate(groundtruth, decimal_yr_arr, aoi_name, sub_category_ref=None):
     """Evaluate co-registered reference and bayts inference data using confusion matrix and F1 score.
     Args:
         groundtruth (xarray): rioxarray of clipped reference image (may need to run reproject match against a sample time series mosaic for the AOI)
@@ -57,6 +57,8 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
         decimal_yr_arr (array): array of boolean values where [True = change, False = no change]
 
         aio_name (str): the area of interest to evaluate, which can be one of ['Brazil', 'DRC', 'Indonesia'].
+
+        sub_category_ref (str): ["terrabrasilia", "gfw"]
 
     Returns:
         Printed confusion matrices and F1 scores for each year in the study period.
@@ -66,11 +68,7 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
 
     if aoi_name == "Brazil":
 
-        ref_data = ["terrabrasilia", "gfw"]
-
-        ref = ref_data[0]
-
-        if ref == ref_data[0]:
+        if sub_category_ref == "terrabrasilia":
             # terrabrasilia ground truth years
             class_year_dict = {
                 0: 2008,
@@ -86,7 +84,7 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
                 10: 2018,
                 11: 2019,
             }
-        else:
+        elif sub_category_ref == "gfw":
             # Global Forest Watch ground truth years
             class_year_dict = {
                 0: 2000,
@@ -110,39 +108,13 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
                 18: 2018,
                 19: 2019,
             }
+        elif sub_category_ref is None:
+            pass
+        else:
+            raise ValueError(
+                f"sub_category_ref should be None, 'gfw', or 'terrabrasilia, not {sub_category_ref}'"
+            )
 
-        year_gt_list = []
-        year_pr_list = []
-
-        for cl in class_year_dict:
-            year_gt = class_year_dict[cl]
-            year_gt_list.append(year_gt)
-
-        for yr in decimal_yr_arr_years.tolist():
-            year_pr_list.append(yr)
-
-        match_years = set(year_gt_list) & set(year_pr_list)
-
-        print("year_gt_list, year_pr_list: ", year_gt_list, year_pr_list)
-        print("match_years: ", match_years)
-
-        for year in match_years:
-
-            cl = list(class_year_dict.keys())[
-                list(class_year_dict.values()).index(year)
-            ]
-
-            groundtruth_arr = groundtruth.copy()
-            groundtruth_arr = groundtruth_arr == cl
-
-            groundtruth_flat = groundtruth_arr.values.flatten()
-            decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
-
-            cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
-            f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
-
-            classes = [False, True]
-            plot_cm(cm, aoi_name, year)
     else:
         # aoi is either DRC or Indonesia
         # Global Forest Watch ground truth years
@@ -180,29 +152,28 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name):
             year_pr_list.append(yr)
 
         match_years = set(year_gt_list) & set(year_pr_list)
+
+        print("year_gt_list, year_pr_list: ", year_gt_list, year_pr_list)
         print("match_years: ", match_years)
 
         for year in match_years:
-            groundtruth_arr = groundtruth.copy()
 
             cl = list(class_year_dict.keys())[
                 list(class_year_dict.values()).index(year)
             ]
 
+            groundtruth_arr = groundtruth.copy()
             groundtruth_arr = groundtruth_arr == cl
 
             groundtruth_flat = groundtruth_arr.values.flatten()
             decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
-            decimal_yr_arr_flat = decimal_yr_arr_flat.astype(bool)
-
-            print(
-                "unique values in groundtruth_flat, decimal_yr_arr_flat: ",
-                np.unique(groundtruth_flat),
-                np.unique(decimal_yr_arr_flat),
-            )
 
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
             f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
+            print(f"For year {year}, the f1 score is {f1}")
+            f1s_dict[year] = f1
 
             classes = [False, True]
             plot_cm(cm, aoi_name, year)
+
+    return f1s_dict
