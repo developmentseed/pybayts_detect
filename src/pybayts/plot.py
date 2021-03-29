@@ -1,6 +1,7 @@
 """Functions for plotting pixel and raster time series."""
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
 
 def plot_df_pixel_ts(df, obs_column: str = "lndvi_obs"):
@@ -40,7 +41,7 @@ def plot_da_pixel_ts(da, obs_column: str):
     plot_df_pixel_ts(df, obs_column)
 
 
-def plot_cm(cm, aoi_name, year):
+def plot_cm(cm, aoi_name, year, figpath):
     cm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
     fig, ax = plt.subplots(figsize=(10, 10))
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
@@ -76,6 +77,6 @@ def plot_cm(cm, aoi_name, year):
                 color="white" if cm[i, j] > thresh else "black",
             )
     fig.tight_layout(pad=2.0, h_pad=2.0, w_pad=2.0)
+    classes = [False, True]
     ax.set_ylim(len(classes) - 0.5, -0.5)
-
-    fig.savefig(f"../data/eval/cm_{aoi_name}_{year}.png")
+    fig.savefig(os.path.join(figdir, f"cm_{aoi_name}_{year}.png"))
