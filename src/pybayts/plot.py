@@ -38,3 +38,44 @@ def plot_da_pixel_ts(da, obs_column: str):
     df["dates"] = df.index.format()
     df = df.asfreq("1D")
     plot_df_pixel_ts(df, obs_column)
+
+
+def plot_cm(cm, aoi_name, year):
+    cm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+    fig, ax = plt.subplots(figsize=(10, 10))
+    im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    # We want to show all ticks...
+    ax.set(
+        xticks=np.arange(cm.shape[1]),
+        yticks=np.arange(cm.shape[0]),
+        # ... and label them with the respective list entries
+        xticklabels=["change", "no change"],
+        yticklabels=["change", "no change"],
+        title=f"Normalized Confusion Matrix for {aoi_name} in {year}",
+        ylabel="True label",
+        xlabel="Predicted label",
+    )
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(
+        ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
+    )
+
+    # Loop over data dimensions and create text annotations.
+    fmt = ".2f"  #'d' # if normalize else 'd'
+    thresh = cm.max() / 2.0
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(
+                j,
+                i,
+                format(cm[i, j], fmt),
+                ha="center",
+                va="center",
+                color="white" if cm[i, j] > thresh else "black",
+            )
+    fig.tight_layout(pad=2.0, h_pad=2.0, w_pad=2.0)
+    ax.set_ylim(len(classes) - 0.5, -0.5)
+
+    fig.savefig(f"../data/eval/cm_{aoi_name}_{year}.png")
