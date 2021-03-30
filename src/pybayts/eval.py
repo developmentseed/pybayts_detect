@@ -6,6 +6,7 @@ Author: @developmentseed
 import numpy as np
 from sklearn.metrics import confusion_matrix, f1_score
 from .plot import plot_cm
+import numpy as np
 
 
 def generate_cm(flat_groundtruth, flat_decimal_yr_arr, year):
@@ -143,40 +144,42 @@ def evaluate(
             19: 2019,
         }
 
-        year_gt_list = []
-        year_pr_list = []
+    year_gt_list = []
+    year_pr_list = []
 
-        for cl in class_year_dict:
-            year_gt = class_year_dict[cl]
-            year_gt_list.append(year_gt)
+    for cl in class_year_dict:
+        year_gt = class_year_dict[cl]
+        year_gt_list.append(year_gt)
 
-        for yr in decimal_yr_arr_years.tolist():
-            year_pr_list.append(yr)
+    for yr in decimal_yr_arr_years.tolist():
+        year_pr_list.append(yr)
 
-        match_years = set(year_gt_list) & set(year_pr_list)
+    match_years = set(year_gt_list) & set(year_pr_list)
 
-        print("year_gt_list, year_pr_list: ", year_gt_list, year_pr_list)
-        print("match_years: ", match_years)
+    print("year_gt_list, year_pr_list: ", year_gt_list, year_pr_list)
+    print("match_years: ", match_years)
 
-        for year in match_years:
+    f1s_dict = {}
 
-            cl = list(class_year_dict.keys())[
-                list(class_year_dict.values()).index(year)
-            ]
+    for year in match_years:
 
-            groundtruth_arr = groundtruth.copy()
-            groundtruth_arr = groundtruth_arr == cl
+        cl = list(class_year_dict.keys())[
+            list(class_year_dict.values()).index(year)
+        ]
 
-            groundtruth_flat = groundtruth_arr.values.flatten()
-            decimal_yr_arr_flat = (
-                decimal_yr_arr.astype(np.uint16).flatten() == year
-            )
+        groundtruth_arr = groundtruth.copy()
+        groundtruth_arr = groundtruth_arr == cl
 
-            cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
-            f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
-            print(f"For year {year}, the f1 score is {f1}")
-            f1s_dict[year] = f1
+        groundtruth_flat = groundtruth_arr.values.flatten()
+        decimal_yr_arr_flat = (
+            decimal_yr_arr.astype(np.uint16).flatten() == year
+        )
 
-            plot_cm(cm, aoi_name, year, figdir)
+        cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
+        f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
+        print(f"For year {year}, the f1 score is {f1}")
+        f1s_dict[year] = f1
+
+        plot_cm(cm, aoi_name, year, figdir)
 
     return f1s_dict
