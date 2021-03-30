@@ -14,6 +14,7 @@ import pandas as pd
 import scipy.stats as stats
 import xarray as xr
 from scipy.sparse import coo_matrix
+from tqdm import tqdm
 
 
 def merge_cpnf_tseries(
@@ -59,13 +60,19 @@ def merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    cpnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
-    cpnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
+    cpnf_l = calc_cpnf(
+        lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l
+    )
+    cpnf_s = calc_cpnf(
+        s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s
+    )
     lndvi_ts = lndvi_ts.to_dataset()
     s1vv_ts = s1vv_ts.to_dataset()
     lndvi_ts["cpnf_lndvi"] = (["date", "y", "x"], cpnf_l)
     s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
-    outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
+    outer_merge_ts = xr.merge(
+        [s1vv_ts, lndvi_ts], join="outer", compat="override"
+    )
     return outer_merge_ts
 
 
@@ -96,8 +103,7 @@ def deseason_ts(
         percentile, dim=("x", "y"), interpolation="nearest"
     )
 
-    # deseasonalize
-    for i in range(len(timeseries)):
+    for i in tqdm(range(len(timeseries))):
         timeseries[i] = timeseries[i] - percentiles[i]
 
     return timeseries
@@ -249,7 +255,9 @@ def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
         cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
             observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
     """
-    assert chi >= cpnf_min  # chi should be greater or equal to the initial criteria
+    assert (
+        chi >= cpnf_min
+    )  # chi should be greater or equal to the initial criteria
     assert chi >= 0.5  # chi should be greater than .5
     bayts.name = "bayts"
     bayts = bayts.to_dataset()
@@ -262,7 +270,7 @@ def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
     # need to probably figure out a better way to do this than iterating over each pixel ts individually
     # in a single process. 1 ts per dask process? numba? cython?
     # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
-    for y in range(len(bayts["y"])):
+    for y in tqdm(range(len(bayts["y"]))):
         for x in range(len(bayts["x"])):
             notnan_mask = bayts["bayts"].isel(y=y, x=x).notnull()
             pixel_ts = bayts.isel(y=y, x=x)
@@ -290,6 +298,88 @@ def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
                     )  # drop=True above makes this float, probably an xarray bug?
                 # otherwise, no detected change, each obs in this time series stays flagged as False
     return bayts
+
+
+def bayts_update_ufunc(
+    pixel_ts: np.array, initial_flag: np.array, chi: float, cpnf_min: float
+) -> Tuple(np.array, np.array):
+    """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
+
+    This is meant to be vectorized with xarray.apply_ufunc. For example:
+
+    xr.apply_ufunc(bayts_update_ufunc, baytsds['updated_bayts'], baytsds['initial_flag'], input_core_dims=[["date"],
+        ["date"]], kwargs={'chi': chi, "cpnf_min":cpnf_min}, dask = 'allowed', vectorize = True)
+
+    Args:
+        pixel_ts (np.array): "bayts" time series created with create_bayts. Can be either
+            vv backscatter or ndvi, or any other single pixel time series with NaNs.
+        initial_flag: time series of initial flags (most False) that note observations flagged as Non-Forest.
+        This gets updated to find the earliest detected Non-Forest probability.
+        chi (float, optional): Threshold of Pchange at which the change is confirmed. Defaults to 0.5.
+        cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
+            observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
+
+
+    Returns: A numpy array with dimensions (date, y, x) and two additional
+        variables besides the bayts timeseries.
+    """
+    # don't update if all values are nan
+    if np.all(np.isnan(pixel_ts)):
+        pass
+    else:
+        pixel_ts_nonan = pixel_ts[~np.isnan(pixel_ts)]
+        initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
+        pixel_ts_nonan, flagged_change = update_pixel_ufunc(
+            pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min
+        )
+        # set valid pixels to their update values. we first index by index label then by index location
+        pixel_ts[~np.isnan(pixel_ts)] = pixel_ts_nonan
+        if np.any(flagged_change):
+            flagged_change_full_size = np.zeroes(pixel_ts.shape, dtype=bool)
+            flagged_change_full_size[~np.isnan(pixel_ts)] = flagged_change
+    # otherwise, no detected change, each obs in this time series stays flagged as False
+    return pixel_ts, flagged_change_full_size
+
+
+def update_pixel_ufunc(pixel_ts, initial_flag, chi, cpnf_min):
+    """Modifies a single pixel view of a spatial timeseries to update the probabilities.
+
+    Args:
+        pixel_ts (xr.Dataset): An xarray Dataset with a single (date) dimension and 4 variables:
+            the original time series "bayts", the initially flagged nonforest observations "initial_flag",
+            the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
+    """
+    flagged_change = initial_flag.copy()
+    possible_nf_indices = np.argwhere(initial_flag)
+    # for each observation, we update it starting from the observation and it's next future neighbor
+    for ind in possible_nf_indices:
+        for t in range(int(ind) + 1, len(pixel_ts)):
+            prior = pixel_ts[t - 1]
+            likelihood = pixel_ts[t]
+            posterior = calc_posterior(prior, likelihood)
+            pixel_ts[
+                t
+            ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
+            if posterior >= chi:
+                # if the previously flagged observation gets posterior computed and it is above the
+                # threshold, we flag it and stop searching this time series for a high confidence
+                # deforestation event (as determined by chi) deforestation event.
+                flagged_change[t] = True
+                return pixel_ts
+            elif posterior < cpnf_min or t == len(pixel_ts):
+                # if the previously flagged observation gets posterior computed and it is below the
+                # threshold or if all possible updates have been made, we unflag it and go on to the
+                # next possible deforested detection in the time series. Or stop if we are out of
+                # possible detections
+                break
+            else:
+                # If the posterior is greater than the cpnf_min but less than chi,
+                # we need to keep searching the time series.
+                pass
+    return (
+        pixel_ts,
+        flagged_change,
+    )  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
 def update_pixel(pixel_ts, chi, cpnf_min):

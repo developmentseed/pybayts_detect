@@ -49,7 +49,9 @@ def generate_f1(flat_groundtruth, flat_decimal_yr_arr, year):
     return f1
 
 
-def evaluate(groundtruth, decimal_yr_arr, aoi_name, sub_category_ref=None):
+def evaluate(
+    groundtruth, decimal_yr_arr, aoi_name, figdir, sub_category_ref=None
+):
     """Evaluate co-registered reference and bayts inference data using confusion matrix and F1 score.
     Args:
         groundtruth (xarray): rioxarray of clipped reference image (may need to run reproject match against a sample time series mosaic for the AOI)
@@ -166,14 +168,15 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name, sub_category_ref=None):
             groundtruth_arr = groundtruth_arr == cl
 
             groundtruth_flat = groundtruth_arr.values.flatten()
-            decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten()
+            decimal_yr_arr_flat = (
+                decimal_yr_arr.astype(np.uint16).flatten() == year
+            )
 
             cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
             f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)
             print(f"For year {year}, the f1 score is {f1}")
             f1s_dict[year] = f1
 
-            classes = [False, True]
-            plot_cm(cm, aoi_name, year)
+            plot_cm(cm, aoi_name, year, figdir)
 
     return f1s_dict
