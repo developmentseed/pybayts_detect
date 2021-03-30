@@ -31,6 +31,7 @@ inst_reqs = [
     "geocube",
     "iteration_utilities>=-0.11.0",
     "scipy",
+    "tqdm",
     # "rio-cogeo==2.1",
     # "cogeo-mosaic==3.0.0rc1",
     # "rio-tiler==2.0.3",
