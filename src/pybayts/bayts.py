@@ -324,6 +324,9 @@ def bayts_update_ufunc(
         variables besides the bayts timeseries.
     """
     # don't update if all values are nan
+    pixel_t = pixel_ts.copy()
+    initial_flag = initial_flag.copy()
+    # don't update if all values are nan
     if np.all(np.isnan(pixel_ts)):
         pass
     else:
