@@ -13,6 +13,7 @@ jobs:
   docs:
     runs-on: ubuntu-20.04
     container: developmentseed/pybaytsci:latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v2
