@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import numpy as np
 
 
 def plot_df_pixel_ts(df, obs_column: str = "lndvi_obs"):
@@ -41,7 +42,7 @@ def plot_da_pixel_ts(da, obs_column: str):
     plot_df_pixel_ts(df, obs_column)
 
 
-def plot_cm(cm, aoi_name, year, figpath):
+def plot_cm(cm, aoi_name, year, figdir):
     cm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
     fig, ax = plt.subplots(figsize=(10, 10))
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
