@@ -374,24 +374,24 @@ def bayts_update_ufunc(
     initial_flag = initial_flag.copy()
     # don't update if all values are nan
     if np.all(np.isnan(pixel_ts)):
-        pass
+        return initial_flag
     else:
         pixel_ts_nonan = pixel_ts[~np.isnan(pixel_ts)]
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
         flagged_change = update_pixel_ufunc(
             pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min
         )
-        # set valid pixels to their update values. we first index by index label then by index location
-        # pixel_ts[~np.isnan(pixel_ts)] = pixel_ts_nonan
         if np.any(flagged_change):
             flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
             flagged_change_full_size[~np.isnan(pixel_ts)] = flagged_change
-    # otherwise, no detected change, each obs in this time series stays flagged as False
-    # we can return pixel_ts with anther version of this function for debugging purposes
-    return flagged_change_full_size
+            # otherwise, no detected change, each obs in this time series stays flagged as False
+            # we can return pixel_ts with anther version of this function for debugging purposes
+            return flagged_change_full_size
+        else:
+            return initial_flag
 
 
-def update_pixel_ufunc(pixel_ts, initial_flag, chi, cpnf_min):
+def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     """Modifies a single pixel view of a spatial timeseries to update the probabilities.
 
     Args:
@@ -432,6 +432,7 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi, cpnf_min):
                 # threshold or if all possible updates have been made, we unflag it and go on to the
                 # next possible deforested detection in the time series. Or stop if we are out of
                 # possible detections
+                flagged_change[t] = False
                 break
             else:
                 # If the posterior is greater than the cpnf_min but less than chi,
@@ -440,19 +441,26 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi, cpnf_min):
     return flagged_change  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
-def loop_bayts_update(bayts, initial_change):
-    bayts = bayts.copy(deep=True)
-    initial_change = initial_change.copy()
-    for y in tqdm(range(len(bayts["y"]))):
-        for x in range(len(bayts["x"])):
-            pixel_ts = bayts.isel(y=y, x=x)
-            initial_change_ts = initial_change.isel(y=y, x=x)
+def loop_bayts_update(
+    bayts, initial_change, date_index, monitor_start: datetime = None
+):
+    if monitor_start:
+        # used to truncate a monitoring period to focus on latter part of timeseries
+        date_i = np.array(list(range(0, len(date_index))))
+        date_i = date_i[date_index > np.datetime64(monitor_start)]
+        monitor_start = date_i[0]
+        bayts = bayts[monitor_start:]
+        initial_change = initial_change[monitor_start:]
+    for y in tqdm(range(bayts.shape[1])):
+        for x in range(bayts.shape[2]):
+            pixel_ts = bayts[:, y, x]
+            initial_change_ts = initial_change[:, y, x]
             # don't update if all values are nan
-            if bool(pixel_ts.isnull().all()):
+            if np.isnan(pixel_ts).all():
                 pass
             else:
                 flagged_change_ts = bayts_update_ufunc(
-                    pixel_ts.data, initial_change_ts.data, 0.5, 0.5
+                    pixel_ts, initial_change_ts, 0.5, 0.5
                 )
                 initial_change[:, y, x] = flagged_change_ts
     return initial_change
@@ -474,7 +482,7 @@ def bayts_da_to_date_array(flagged_change):
             The third array contains the dates in units of decimal years, for easier visualization and comparison with
             the R results.
     """
-
+    flagged_change = flagged_change["flagged_change"]
     date_coords = np.argwhere(flagged_change.data)
     coord_df = pd.DataFrame(date_coords, columns=["date", "y", "x"])
     date_c = coord_df.date.values
