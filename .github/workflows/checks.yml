@@ -30,7 +30,7 @@ jobs:
 
       # Run tox using the version of Python in `PATH`
       - name: Tox
-        run: tox -e py
+        run: tox -v -e py
         env:
           LDFLAGS: -L/usr/local/lib -L/usr/local/opt/openssl/lib -L/usr/local/opt/readline/lib
 
