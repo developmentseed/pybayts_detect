@@ -245,107 +245,6 @@ def subset_by_midpoint(bayts):
     return baytssubset
 
 
-def bayts_update(bayts, chi: float = 0.5, cpnf_min: float = 0.5):
-    """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
-
-    Returns a boolean xarray Dataset with dimensions (date, y, x) and two additional
-        variables besides the bayts timeseries:
-        Non-Forest-Change: where "True" means a change was flagged confirmed as Non-Forest.
-            False means a change was not initially flagged, or was flagged but then
-            unflagged by the iterative bayesian updating.
-        Initial-Flagged-Change: where "True" indicates that the observation initially satisfied
-            the cpnf_min criteria to be flagged as possible change. "False" indicates the
-            observation was never considered as a possible change.
-
-    Args:
-        bayts (xr.DataArray): "bayts" time series created with create_bayts from two time series
-            (vv backscatter and ndvi).
-        chi (float, optional): Threshold of Pchange at which the change is confirmed. Defaults to 0.5.
-        cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
-            observation is flagged. Also used to check and keep posterior probabilities flagged for updating. Defaults to 0.5
-    """
-    assert (
-        chi >= cpnf_min
-    )  # chi should be greater or equal to the initial criteria
-    assert chi >= 0.5  # chi should be greater than .5
-    bayts.name = "bayts"
-    bayts = bayts.to_dataset()
-    bayts["initial_flag"] = xr.where(bayts["bayts"] > cpnf_min, True, False)
-    bayts["flagged_change"] = (
-        ("date", "y", "x"),
-        np.full(bayts["initial_flag"].shape, False),
-    )  # this is updated in the loop
-    bayts["updated_bayts"] = bayts["bayts"]
-    # need to probably figure out a better way to do this than iterating over each pixel ts individually
-    # in a single process. 1 ts per dask process? numba? cython?
-    # https://numpy.org/doc/stable/reference/arrays.nditer.html#arrays-nditer
-    for y in tqdm(range(len(bayts["y"]))):
-        for x in range(len(bayts["x"])):
-            notnan_mask = bayts["bayts"].isel(y=y, x=x).notnull()
-            pixel_ts = bayts.isel(y=y, x=x)
-            # we need the date coords as positional integers since xarray doesn't support using
-            # location based indexing to return a view instead of a copy.
-            # we need views to assign updated posterior values to specific dates later.
-            pixel_ts = pixel_ts.assign_coords(
-                date_i=("date", list(range(0, len(pixel_ts.date))))
-            )
-            pixel_ts = pixel_ts.where(notnan_mask, drop=True)
-            # don't update if all values are nan
-            if bool(pixel_ts["updated_bayts"].isnull().all()):
-                pass
-            else:
-                pixel_ts = update_pixel(pixel_ts, chi, cpnf_min)
-                # set valid pixels to their update values. we first index by index label then by index location
-                bayts["updated_bayts"].loc[pixel_ts.date][:, y, x] = pixel_ts[
-                    "updated_bayts"
-                ]
-                if bool(pixel_ts["flagged_change"].any()):
-                    bayts["flagged_change"][pixel_ts.date_i, y, x] = pixel_ts[
-                        "flagged_change"
-                    ].astype(
-                        bool
-                    )  # drop=True above makes this float, probably an xarray bug?
-                # otherwise, no detected change, each obs in this time series stays flagged as False
-    return bayts
-
-
-def update_pixel(pixel_ts, chi, cpnf_min):
-    """Modifies a single pixel view of a spatial timeseries to update the probabilities.
-
-    Args:
-        pixel_ts (xr.Dataset): An xarray Dataset with a single (date) dimension and 4 variables:
-            the original time series "bayts", the initially flagged nonforest observations "initial_flag",
-            the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
-    """
-    possible_nf_indices = np.argwhere(pixel_ts["initial_flag"].data)
-    # for each observation, we update it starting from the observation and it's next future neighbor
-    for ind in possible_nf_indices:
-        for t in range(int(ind) + 1, len(pixel_ts["date"])):
-            prior = pixel_ts["updated_bayts"][t - 1]
-            likelihood = pixel_ts["updated_bayts"][t]
-            posterior = calc_posterior(prior, likelihood)
-            pixel_ts["updated_bayts"][
-                t
-            ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
-            if posterior >= chi:
-                # if the previously flagged observation gets posterior computed and it is above the
-                # threshold, we flag it and stop searching this time series for a high confidence
-                # deforestation event (as determined by chi) deforestation event.
-                pixel_ts["flagged_change"][t] = True
-                return pixel_ts
-            elif posterior < cpnf_min or t == len(pixel_ts["date"]):
-                # if the previously flagged observation gets posterior computed and it is below the
-                # threshold or if all possible updates have been made, we unflag it and go on to the
-                # next possible deforested detection in the time series. Or stop if we are out of
-                # possible detections
-                break
-            else:
-                # If the posterior is greater than the cpnf_min but less than chi,
-                # we need to keep searching the time series.
-                pass
-    return pixel_ts  # this is returned if none of the initially flagged observations were confirmed with chi
-
-
 def bayts_update_ufunc(
     pixel_ts: np.array, initial_flag: np.array, chi: float, cpnf_min: float
 ) -> Tuple:
@@ -359,7 +258,7 @@ def bayts_update_ufunc(
     Args:
         pixel_ts (np.array): "bayts" time series created with create_bayts. Can be either
             vv backscatter or ndvi, or any other single pixel time series with NaNs.
-        initial_flag: time series of initial flags (most False) that note observations flagged as Non-Forest.
+        initial_flag (np.array): time series of initial flags (most False) that note observations flagged as Non-Forest.
         This gets updated to find the earliest detected Non-Forest probability.
         chi (float, optional): Threshold of Pchange at which the change is confirmed. Defaults to 0.5.
         cpnf_min (float, optional): Threshold of conditional non-forest probability above which the first
@@ -395,9 +294,8 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     """Modifies a single pixel view of a spatial timeseries to update the probabilities.
 
     Args:
-        pixel_ts (xr.Dataset): An xarray Dataset with a single (date) dimension and 4 variables:
-            the original time series "bayts", the initially flagged nonforest observations "initial_flag",
-            the updated flaged changes "flagged_change", and the updated bayts time series "updated_bayts".
+        pixel_ts (np.array): A numpy array with a single (date) dimension containing the probabilities that are to be updated.
+        initial_flag (np.array): The initially flagged nonforest observations that are updated to be False if not above chi or True if above chi.
     """
 
     def set_flagged_change(flagged_change, t):
@@ -444,6 +342,20 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
 def loop_bayts_update(
     bayts, initial_change, date_index, monitor_start: datetime = None
 ):
+    """Loop through pixels to update each pixel time series probabilities. Used for debugging.
+
+    Args:
+        bayts (numpy.array): A numpy array with the probabilities for the fused timeseries and dimensions (date, y, x).
+        initial_change ([type]): The initially flagged nonforest observations with dimensions (date, y, x).
+            Updated to be False if not above chi or True if above chi.
+        date_index (numpy.array): 1 dimensional date64 array of dates for the time series.
+        monitor_start (datetime, optional): A datetime threshold used to truncate the timeseries to only monitor the latter part. Defaults to None.
+
+    Returns:
+        numpy.array: Boolean array with shape (date, y, x) showing true where deforestation is detected and False where not.
+            NOTE: If monitor_start is used, this needs to be assigned to an xarray DataArray with the same dimensions later
+            so that dates are properly assigned to the True booleans.
+    """
     if monitor_start:
         # used to truncate a monitoring period to focus on latter part of timeseries
         date_i = np.array(list(range(0, len(date_index))))
