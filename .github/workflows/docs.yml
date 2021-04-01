@@ -12,28 +12,19 @@ on:
 jobs:
   docs:
     runs-on: ubuntu-20.04
-    container: developmentseed/pybaytsci:latest
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v2
+        uses: actions/checkout@v2
 
-      - name: Install dependencies
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
         run: |
           python -m pip install --upgrade pip
-          python -m pip install tox codecov pre-commit
-
-      # Run tox using the version of Python in `PATH`
-      - name: Tox
-        run: tox -v -e py
-        env:
-          LDFLAGS: -L/usr/local/lib -L/usr/local/opt/openssl/lib -L/usr/local/opt/readline/lib
-
-      # Run pre-commit
-      - name: Pre-commit
-        run: |
-          pre-commit install --install-hooks
-          pre-commit run --all-files
+          python -m pip install tox
 
       # Constantly generate and deploy docs during development
       - name: Generate Docs
