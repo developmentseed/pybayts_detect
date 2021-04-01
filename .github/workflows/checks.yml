@@ -11,11 +11,30 @@ on:
 
 jobs:
   tests:
-    runs-on: ubuntu-20.04
-    container: developmentseed/pybaytsci:latest
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.8]
+
     timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v2
+      - name: install deps
+        run: |
+          sudo apt-get install -y git \
+            gpg-agent \
+            wget \
+            curl \
+            libpocl-dev \
+            nodejs \
+            libpq-dev
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -30,15 +49,14 @@ jobs:
 
       # Run tox using the version of Python in `PATH`
       - name: Tox
-        run: tox -v -e py
+        run: tox -e py
         env:
           LDFLAGS: -L/usr/local/lib -L/usr/local/opt/openssl/lib -L/usr/local/opt/readline/lib
 
-      # Run pre-commit
-      - name: Pre-commit
-        run: |
-          pre-commit install --install-hooks
-          pre-commit run --all-files
+      # Run pre-commit (only for python-3.8)
+      - name: run pre-commit
+        if: matrix.python-version == 3.8
+        run: pre-commit run --all-files
 
       - name: Upload Results
         if: success()
