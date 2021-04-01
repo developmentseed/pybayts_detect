@@ -14,22 +14,30 @@ Why does this file exist, and why not put this in __main__?
 
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
-import click
+from datetime import datetime
 
-from pybayts.data.io import *
-from pybayts.data.stack import *
-from pybayts.data.qa import *
-from pybayts.eval import *
+import click
+import pandas as pd
 import xarray as xr
 
-from pybayts.bayts import *
+from pybayts.bayts import bayts_da_to_date_array
+from pybayts.bayts import create_bayts_ts
+from pybayts.bayts import deseason_ts
+from pybayts.bayts import loop_bayts_update
+from pybayts.bayts import to_year_fraction
+from pybayts.data.io import read_and_stack_example_tifs
+from pybayts.data.stack import merge_cpnf_tseries
 
 
 @click.command()
 def main():
     """Main function for cli."""
-    folder_vv = "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/s1vv_tseries/"
-    folder_ndvi = "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/lndvi_tseries/"
+    folder_vv = (
+        "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/s1vv_tseries/"
+    )
+    folder_ndvi = (
+        "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/lndvi_tseries/"
+    )
     pdf_type_l = ("gaussian", "gaussian")
     pdf_forest_l = (0, 0.1)  # mean and sd
     pdf_nonforest_l = (-0.5, 0.125)  # mean and sd
@@ -39,10 +47,10 @@ def main():
     pdf_nonforest_s = (-4, 1)  # mean and sd
     bwf_s = (0.1, 0.9)
 
-    s1vv_ts = read_and_stack_tifs(folder_vv, ds="vv")
+    s1vv_ts = read_and_stack_example_tifs(folder_vv, ds="vv")
     s1vv_ts.name = "s1vv"
 
-    lndvi_ts = read_and_stack_tifs(folder_ndvi, ds="lndvi")
+    lndvi_ts = read_and_stack_example_tifs(folder_ndvi, ds="lndvi")
     lndvi_ts.name = "lndvi"
 
     _ = deseason_ts(s1vv_ts)
@@ -81,9 +89,7 @@ def main():
     # Need a dataset for the date coordinates
     baytsds["flagged_change"] = (("date", "y", "x"), flagged_change)
 
-    date_index_arr, actual_dates, decimal_yr_arr = bayts_da_to_date_array(
-        baytsds
-    )
+    date_index_arr, actual_dates, decimal_yr_arr = bayts_da_to_date_array(baytsds)
 
     print(f"decimal_yr_arr: {decimal_yr_arr}")
 

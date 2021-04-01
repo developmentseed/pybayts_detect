@@ -4,9 +4,10 @@ Author: @developmentseed
 """
 
 import numpy as np
-from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import f1_score
+
 from .plot import plot_cm
-import numpy as np
 
 
 def generate_cm(flat_groundtruth, flat_decimal_yr_arr, year):
@@ -50,9 +51,7 @@ def generate_f1(flat_groundtruth, flat_decimal_yr_arr, year):
     return f1
 
 
-def evaluate(
-    groundtruth, decimal_yr_arr, aoi_name, figdir, sub_category_ref=None
-):
+def evaluate(groundtruth, decimal_yr_arr, aoi_name, figdir, sub_category_ref=None):
     """Evaluate co-registered reference and bayts inference data using confusion matrix and F1 score.
     Args:
         groundtruth (xarray): rioxarray of clipped reference image (may need to run reproject match against a sample time series mosaic for the AOI)
@@ -163,17 +162,13 @@ def evaluate(
 
     for year in match_years:
 
-        cl = list(class_year_dict.keys())[
-            list(class_year_dict.values()).index(year)
-        ]
+        cl = list(class_year_dict.keys())[list(class_year_dict.values()).index(year)]
 
         groundtruth_arr = groundtruth.copy()
         groundtruth_arr = groundtruth_arr == cl
 
         groundtruth_flat = groundtruth_arr.values.flatten()
-        decimal_yr_arr_flat = (
-            decimal_yr_arr.astype(np.uint16).flatten() == year
-        )
+        decimal_yr_arr_flat = decimal_yr_arr.astype(np.uint16).flatten() == year
 
         cm = generate_cm(groundtruth_flat, decimal_yr_arr_flat, year)
         f1 = generate_f1(groundtruth_flat, decimal_yr_arr_flat, year)

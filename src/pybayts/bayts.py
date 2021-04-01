@@ -60,19 +60,13 @@ def merge_cpnf_tseries(
         xr.Dataset: A dataset with 4 variables, "s1vv", "lndvi", "pnf_s1vv",
            "pnf_lndvi" and dims ["date", "y", "x"].
     """
-    cpnf_l = calc_cpnf(
-        lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l
-    )
-    cpnf_s = calc_cpnf(
-        s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s
-    )
+    cpnf_l = calc_cpnf(lndvi_ts, pdf_type_l, pdf_forest_l, pdf_nonforest_l, bwf_l)
+    cpnf_s = calc_cpnf(s1vv_ts, pdf_type_s, pdf_forest_s, pdf_nonforest_s, bwf_s)
     lndvi_ts = lndvi_ts.to_dataset()
     s1vv_ts = s1vv_ts.to_dataset()
     lndvi_ts["cpnf_lndvi"] = (["date", "y", "x"], cpnf_l)
     s1vv_ts["cpnf_s1vv"] = (["date", "y", "x"], cpnf_s)
-    outer_merge_ts = xr.merge(
-        [s1vv_ts, lndvi_ts], join="outer", compat="override"
-    )
+    outer_merge_ts = xr.merge([s1vv_ts, lndvi_ts], join="outer", compat="override")
     return outer_merge_ts
 
 
@@ -237,10 +231,19 @@ def create_bayts_ts(timeseries):
 
 
 def subset_by_midpoint(bayts):
+    """Subset the time series to 100x100 width and height
+
+    Args:
+        bayts (numpy.ndarray): The probability time series.
+
+    Returns:
+        numpy.ndarray: The subsetted timeseries.
+    """
     ymid, xmid = int(bayts.shape[1] / 2), int(bayts.shape[2] / 2)
     radius = 50
     baytssubset = bayts.isel(
-        y=slice(ymid - 50, ymid + 50), x=slice(xmid - 50, xmid + 50)
+        y=slice(ymid - radius, ymid + radius),
+        x=slice(xmid - radius, xmid + radius),
     )
     return baytssubset
 
@@ -339,9 +342,7 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     return flagged_change  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
-def loop_bayts_update(
-    bayts, initial_change, date_index, monitor_start: datetime = None
-):
+def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
     """Loop through pixels to update each pixel time series probabilities. Used for debugging.
 
     Args:

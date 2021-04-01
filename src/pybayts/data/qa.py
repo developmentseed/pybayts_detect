@@ -1,6 +1,9 @@
+"""Funcs for filtering Landsat 8 Collection 2 Level 2 scenes by the clear pixels, removing cloud, cloud shadow, etc."""
+
 from enum import Enum
-import numpy
 from typing import Iterable
+
+import numpy
 
 
 class Collection2_QAValues(Enum):
