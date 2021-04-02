@@ -1,22 +1,25 @@
-from typing import List
+"""Funcs for stacking analysis read scenes into analysis read time series."""
+
+import json
 import os
+import re
+import time
+from datetime import datetime
+from itertools import islice
+from pathlib import Path
+from typing import List
+
+import geopandas as gpd
 import pandas as pd
 import rioxarray as rio
-from rioxarray.merge import merge_arrays
 import xarray as xr
+from geocube.api.core import make_geocube
 from iteration_utilities import groupedby
-import json
-import geopandas as gpd
-from geocube.api.core import make_geocube
-from .qa import Collection2_QAValues, pixel_to_qa
-import time
-from pathlib import Path
-from itertools import islice
-import re
-from datetime import datetime
-from geocube.api.core import make_geocube
-from pathlib import Path
+from rioxarray.merge import merge_arrays
 from tqdm import tqdm
+
+from .qa import Collection2_QAValues
+from .qa import pixel_to_qa
 
 
 def create_two_timeseries(
@@ -30,12 +33,32 @@ def create_two_timeseries(
     l8_merged_ndvi_outfolder_dir,
     sentinel_merged_outfolder_dir,
 ):
+    """Runs the preprocessing to merge and stack scenes from two sensors in two separate folders.
+
+    These folders need to contain Sentinel-1 from the ASF and Landsat 8 from Azure.
+
+    Args:
+        landsat_csv (str): CSV with paths to scenes on Azure West Europe, including SAS token.
+        sentinel_csv (str): CSV with GRD IDs from an ASF Vertex search, with the Full .SAFE ID.
+        sentinel_aoi_csv_path (str): Path to save out a csv with actual paths to sentinel scenes
+            that are stored on Azure filestorage, since the ASF .SAFE IDs do not directly correspond
+            to the filenames that are downloaded.
+        geojson_p (str): Path to geojson aoi.
+        aoi_EPSG (str): The aoi projection (UTM). Provide as "EPSG:<the epsg code>"
+        sentinel_in_folder (str): The folder containing the sentinel scenes on azure.
+        l8_ndvi_outfolder_dir (str): Folder on azure file storage to save Landsat NDVI
+        l8_merged_ndvi_outfolder_dir (str): Folder to save merged day scenes of NDVI.
+        sentinel_merged_outfolder_dir (str): Folder to save merged day scenes of Sentinel-1 VV backscatter.
+
+    Returns:
+        (xarray.DataArray, xarray.DataArray): xarray.DataArrays for Sentinel-1 VV backscatter and Landsat NDVI.
+    """
     for i in [
         l8_ndvi_outfolder_dir,
         l8_merged_ndvi_outfolder_dir,
         sentinel_merged_outfolder_dir,
     ]:
-        if os.path.exists(i) == False:
+        if not os.path.exists(i):
             os.makedirs(i)
 
     sentinel_names = get_scene_paths(sentinel_csv)
@@ -44,9 +67,7 @@ def create_two_timeseries(
     aoi_gdf = gpd.read_file(geojson_p)
 
     # utm epsg for brazil since landsat and sentinel in utm
-    aoi_grid_ds = make_geocube(
-        aoi_gdf, output_crs=aoi_EPSG, resolution=(30, 30)
-    )
+    aoi_grid_ds = make_geocube(aoi_gdf, output_crs=aoi_EPSG, resolution=(30, 30))
 
     liter = iter(landsat_paths)
     lp_tups = list(zip(liter, liter))
@@ -116,7 +137,6 @@ def scene_id_to_ndvi_arr(outdir: str, b4_path: str, b5_path: str) -> str:
     Returns:
         str: The path to the NDVI .tif
     """
-    start = time.time()
     # confirm scene ids are the same
     assert "B4" in b4_path
     assert "B5" in b5_path
@@ -134,17 +154,22 @@ def scene_id_to_ndvi_arr(outdir: str, b4_path: str, b5_path: str) -> str:
         calc_ndvi = (nir - red) / (nir + red)
         ndvi_path = os.path.join(outdir, scene_id_b4 + "_NDVI.tif")
         qa_path = (
-            b4_path.split("SR_B4")[0]
-            + "QA_PIXEL.TIF"
-            + "?"
-            + b4_path.split("?")[1]
+            b4_path.split("SR_B4")[0] + "QA_PIXEL.TIF" + "?" + b4_path.split("?")[1]
         )
         clear_mask = get_clear_qa_mask(qa_path)
         calc_ndvi.where(clear_mask).rio.to_raster(ndvi_path)
-        return ndvi_path, time.time() - start
+        return ndvi_path
 
 
-def get_clear_qa_mask(qa_path):
+def get_clear_qa_mask(qa_path: str):
+    """Extracts clear pixel mask from Collection 2 Level 2 QA_PIXEL band.
+
+    Args:
+        qa_path (str): Path to qa .tif
+
+    Returns:
+        numpy.ndarray: The the clear pixel ndarray.
+    """
     with rio.open_rasterio(qa_path, lock=False, chunks=(1, "auto", -1)) as qa:
         qa = qa.rio.set_nodata(1)
         qa = qa.sel(band=1)
@@ -165,17 +190,13 @@ def groupby_date(scenes: List[str]) -> List[List]:
         List[List]: A list of lists, where each inner list contains the paths occurring at the same date and aoi.
     """
     if "landsateuwest" in scenes[0] or "l8processed" in scenes[0]:
-        group_dict = groupedby(
-            scenes, key=lambda x: x.split("/")[-1].split("_")[3]
-        )
+        group_dict = groupedby(scenes, key=lambda x: x.split("/")[-1].split("_")[3])
     elif "RTC30" in scenes[0]:
         group_dict = groupedby(
             scenes, key=lambda x: x.split("/")[-1].split("_")[2][0:8]
         )
     elif "NDVI" in scenes[0]:
-        group_dict = groupedby(
-            scenes, key=lambda x: x.split("/")[-1].split("_")[3]
-        )
+        group_dict = groupedby(scenes, key=lambda x: x.split("/")[-1].split("_")[3])
     else:
         raise ValueError(
             "The scene paths do not contain a Landsat or Sentinel-1 identifier sub string."
@@ -184,6 +205,7 @@ def groupby_date(scenes: List[str]) -> List[List]:
 
 
 def open_geojson(geojson_path):
+    """Opens a geojson as a dict."""
     with open(geojson_path) as f:
         feature = json.load(f)
     return feature
@@ -337,11 +359,24 @@ def sentinel_paths_for_aoi_csv(
 
 
 def group_merge_stack(paths, aoi_grid_ds, merged_outfolder_dir, date_index=3):
+    """Merges scenes from sensors taken on same date, stacks as time series.
+
+    Merging is only done if the file does not exist yet, otherwise the merged paths in
+        merged_outfolder_dir are stacked.
+
+    Args:
+        paths (list): List of paths to S1 VV backscatter or NDVI.
+        aoi_grid_ds (xarray.DataArray): The DataArray representing the AOI.
+        merged_outfolder_dir (str): Directory to save merged day scenes.
+        date_index (int, optional): The position between "_" of the date string in filename.
+            Defaults to 3 for LAndsat, should be 2 for Sentinel-1.
+
+    Returns:
+        xarray.DataArray: The time series.
+    """
     date_groups = groupby_date(paths)
 
-    merged_paths = merge_each_date(
-        date_groups, aoi_grid_ds, merged_outfolder_dir
-    )
+    merged_paths = merge_each_date(date_groups, aoi_grid_ds, merged_outfolder_dir)
     print("Final step, opening and stacking time series...")
     arrs = []
     for p in merged_paths:

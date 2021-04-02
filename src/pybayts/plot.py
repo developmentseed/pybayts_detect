@@ -1,8 +1,9 @@
 """Functions for plotting pixel and raster time series."""
-import matplotlib.pyplot as plt
-import seaborn as sns
 import os
+
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 
 def plot_df_pixel_ts(df, obs_column: str = "lndvi_obs"):
@@ -42,7 +43,15 @@ def plot_da_pixel_ts(da, obs_column: str):
     plot_df_pixel_ts(df, obs_column)
 
 
-def plot_cm(cm, aoi_name, year, figdir):
+def plot_cm(cm, aoi_name: str, year: int, figdir: str):
+    """Plots a confusion matrix and saves it witht he aoi_name in figdir.
+
+    Args:
+        cm (numpy.ndarray): The confusion matrix.
+        aoi_name (str): The aoi_name string
+        year (int): The year that is being evaluated.
+        figdir (str): The path to the directory to save the figures.
+    """
     cm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
     fig, ax = plt.subplots(figsize=(10, 10))
     im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
@@ -60,12 +69,10 @@ def plot_cm(cm, aoi_name, year, figdir):
     )
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(
-        ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
-    )
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
     # Loop over data dimensions and create text annotations.
-    fmt = ".2f"  #'d' # if normalize else 'd'
+    fmt = ".2f"  # 'd' # if normalize else 'd'
     thresh = cm.max() / 2.0
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):

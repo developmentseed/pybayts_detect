@@ -14,22 +14,24 @@ Why does this file exist, and why not put this in __main__?
 
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
-import click
+from datetime import datetime
 
-from pybayts.data.io import *
-from pybayts.data.stack import *
-from pybayts.data.qa import *
-from pybayts.eval import *
+import click
 import xarray as xr
 
-from pybayts.bayts import *
+from pybayts.bayts import bayts_da_to_date_array
+from pybayts.bayts import create_bayts_ts
+from pybayts.bayts import deseason_ts
+from pybayts.bayts import loop_bayts_update
+from pybayts.bayts import merge_cpnf_tseries
+from pybayts.data.io import read_and_stack_example_tifs
 
 
 @click.command()
-def main():
+@click.argument("vv_folder")
+@click.argument("ndvi_folder")
+def main(vv_folder, ndvi_folder):
     """Main function for cli."""
-    folder_vv = "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/s1vv_tseries/"
-    folder_ndvi = "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/lndvi_tseries/"
     pdf_type_l = ("gaussian", "gaussian")
     pdf_forest_l = (0, 0.1)  # mean and sd
     pdf_nonforest_l = (-0.5, 0.125)  # mean and sd
@@ -39,10 +41,10 @@ def main():
     pdf_nonforest_s = (-4, 1)  # mean and sd
     bwf_s = (0.1, 0.9)
 
-    s1vv_ts = read_and_stack_tifs(folder_vv, ds="vv")
+    s1vv_ts = read_and_stack_example_tifs(vv_folder, ds="vv")
     s1vv_ts.name = "s1vv"
 
-    lndvi_ts = read_and_stack_tifs(folder_ndvi, ds="lndvi")
+    lndvi_ts = read_and_stack_example_tifs(ndvi_folder, ds="lndvi")
     lndvi_ts.name = "lndvi"
 
     _ = deseason_ts(s1vv_ts)
@@ -64,10 +66,7 @@ def main():
     bayts = create_bayts_ts(cpnf_ts)
 
     initial_change = xr.where(bayts >= 0.5, True, False)
-    # for R compare
-    decimal_years = [
-        to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values
-    ]
+
     monitor_start = datetime(2016, 1, 1)
     flagged_change = loop_bayts_update(
         bayts.data,
@@ -81,9 +80,7 @@ def main():
     # Need a dataset for the date coordinates
     baytsds["flagged_change"] = (("date", "y", "x"), flagged_change)
 
-    date_index_arr, actual_dates, decimal_yr_arr = bayts_da_to_date_array(
-        baytsds
-    )
+    date_index_arr, actual_dates, decimal_yr_arr = bayts_da_to_date_array(baytsds)
 
     print(f"decimal_yr_arr: {decimal_yr_arr}")
 
