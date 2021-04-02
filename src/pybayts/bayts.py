@@ -454,3 +454,15 @@ def to_year_fraction(date):
     fraction = yearElapsed / yearDuration
 
     return date.year + fraction
+
+
+def dates_to_decimal_years(npdates):
+    """Convert np.datetime64 type array to list of decimal years.
+
+    Args:
+        npdates (numpy.ndarray): Array of numpy dates.
+
+    Returns:
+        List: List of decimal years.
+    """
+    return [to_year_fraction(pd.to_datetime(date)) for date in npdates]

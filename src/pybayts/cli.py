@@ -17,14 +17,13 @@ Why does this file exist, and why not put this in __main__?
 from datetime import datetime
 
 import click
-import pandas as pd
 import xarray as xr
 
 from pybayts.bayts import bayts_da_to_date_array
 from pybayts.bayts import create_bayts_ts
 from pybayts.bayts import deseason_ts
 from pybayts.bayts import loop_bayts_update
-from pybayts.bayts import to_year_fraction, merge_cpnf_tseries
+from pybayts.bayts import merge_cpnf_tseries
 from pybayts.data.io import read_and_stack_example_tifs
 
 
@@ -67,10 +66,7 @@ def main(vv_folder, ndvi_folder):
     bayts = create_bayts_ts(cpnf_ts)
 
     initial_change = xr.where(bayts >= 0.5, True, False)
-    # for R compare
-    decimal_years = [
-        to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values
-    ]
+
     monitor_start = datetime(2016, 1, 1)
     flagged_change = loop_bayts_update(
         bayts.data,
@@ -84,9 +80,7 @@ def main(vv_folder, ndvi_folder):
     # Need a dataset for the date coordinates
     baytsds["flagged_change"] = (("date", "y", "x"), flagged_change)
 
-    date_index_arr, actual_dates, decimal_yr_arr = bayts_da_to_date_array(
-        baytsds
-    )
+    date_index_arr, actual_dates, decimal_yr_arr = bayts_da_to_date_array(baytsds)
 
     print(f"decimal_yr_arr: {decimal_yr_arr}")
 
