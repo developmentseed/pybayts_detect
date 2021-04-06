@@ -294,11 +294,13 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     # for each observation, we update it starting from the observation and it's next future neighbor
     for ind in possible_nf_indices:
         for t in range(int(ind), len(pixel_ts)):
-            if pixel_ts[t] >= chi and t == 0:
-                return set_flagged_change(flagged_change, t)
-            prior = pixel_ts[t - 1]
-            likelihood = pixel_ts[t]
-            posterior = calc_posterior(prior, likelihood)
+            if t == 0:
+                # can't update this observation base don t-1 if t is 0
+                posterior = pixel_ts[t]
+            else:
+                prior = pixel_ts[t - 1]
+                likelihood = pixel_ts[t]
+                posterior = calc_posterior(prior, likelihood)
             pixel_ts[
                 t
             ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
@@ -338,6 +340,7 @@ def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
             so that dates are properly assigned to the True booleans.
     """
     flagged_change_output = initial_change.copy()
+    after_monitor_start = date_index > np.datetime64(monitor_start)
     for y in tqdm(range(bayts.shape[1])):
         for x in range(bayts.shape[2]):
             pixel_ts = bayts[:, y, x]
@@ -359,14 +362,20 @@ def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
                     after_monitor_start_t_minus_1_indices = np.where(after_monitor_start_t_minus_1)
                     pixel_ts = pixel_ts[after_monitor_start_t_minus_1]
                     initial_change_ts = initial_change_ts[after_monitor_start_t_minus_1]
-                    flagged_change_ts = bayts_update_ufunc(pixel_ts, initial_change_ts, 0.5, 0.5)
-                    flagged_change_output[
-                        after_monitor_start_t_minus_1_indices, y, x
-                    ] = flagged_change_ts
+                    if y == 47 and x == 77:  # added cond for debug
+                        flagged_change_ts = bayts_update_ufunc(
+                            pixel_ts, initial_change_ts, 0.5, 0.5
+                        )
+                        flagged_change_output[
+                            after_monitor_start_t_minus_1_indices, y, x
+                        ] = flagged_change_ts
                 else:
                     flagged_change_ts = bayts_update_ufunc(pixel_ts, initial_change_ts, 0.5, 0.5)
                     flagged_change_output[:, y, x] = flagged_change_ts[after_monitor_start]
-    return initial_change
+    if monitor_start:
+        return flagged_change_output[after_monitor_start]
+    else:
+        return flagged_change_output
 
 
 def bayts_da_to_date_array(flagged_change):
