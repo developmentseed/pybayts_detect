@@ -15,10 +15,10 @@ Why does this file exist, and why not put this in __main__?
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
 from datetime import datetime
-import matplotlib.pyplot as plt
+
 import click
-import xarray as xr
 import rioxarray as rx
+import xarray as xr
 
 from pybayts.bayts import bayts_da_to_date_array
 from pybayts.bayts import create_bayts_ts
@@ -86,7 +86,7 @@ def main(vv_folder, ndvi_folder):
     print(f"decimal_yr_arr: {decimal_yr_arr}")
 
     masked_bayts_r = rx.open_rasterio(
-        "/Users/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/bayts_spatial_result.tif",
+        "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/bayts_spatial_result.tif",
         masked=True,
     )
     r_results_ds = masked_bayts_r.to_dataset(dim="band")

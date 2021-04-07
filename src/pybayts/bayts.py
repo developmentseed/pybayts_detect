@@ -93,7 +93,9 @@ def deseason_ts(
     if min_v:
         timeseries = timeseries.where(timeseries < min_v, np.nan, timeseries)
     # percentiles for each raster scene
-    percentiles = timeseries.quantile(percentile, dim=("x", "y"), interpolation="nearest")
+    percentiles = timeseries.quantile(
+        percentile, dim=("x", "y"), interpolation="nearest"
+    )
 
     for i in tqdm(range(len(timeseries))):
         timeseries[i] = timeseries[i] - percentiles[i]
@@ -146,24 +148,34 @@ def calc_cpnf(
         # Gaussian pdf (mean and sd)
         if pdf_type[0] == "gaussian":
             # the probability of observing the observation given it is non-forest
-            pobs_f = stats.norm.pdf(x=timeseries, loc=forest_dist[0], scale=forest_dist[1])
+            pobs_f = stats.norm.pdf(
+                x=timeseries, loc=forest_dist[0], scale=forest_dist[1]
+            )
         elif pdf_type[0] == "weibull":
-            pobs_f = stats.weibull.pdf(x=timeseries, shape=forest_dist[0], scale=forest_dist[1])
+            pobs_f = stats.weibull.pdf(
+                x=timeseries, shape=forest_dist[0], scale=forest_dist[1]
+            )
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[0].")
 
         # Weibull pdf (shape and scale), TODO figure out why loc (the mean) wasn't supplied for this distribution
         if pdf_type[1] == "gaussian":
-            pobs_nf = stats.norm.pdf(x=timeseries, loc=nforest_dist[0], scale=nforest_dist[1])
+            pobs_nf = stats.norm.pdf(
+                x=timeseries, loc=nforest_dist[0], scale=nforest_dist[1]
+            )
         elif pdf_type[1] == "weibull":
-            pobs_nf = stats.weibull.pdf(x=timeseries, shape=nforest_dist[0], scale=nforest_dist[1])
+            pobs_nf = stats.weibull.pdf(
+                x=timeseries, shape=nforest_dist[0], scale=nforest_dist[1]
+            )
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[1].")
 
         # calculate conditinal NF
         pobs_nf[pobs_nf < 1e-100] = 0
         # pobs_nf is now the conditional NF probability, not p of the observation given NF
-        pobs_nf[pobs_nf > 0] = pobs_nf[pobs_nf > 0] / (pobs_f[pobs_nf > 0] + pobs_nf[pobs_nf > 0])
+        pobs_nf[pobs_nf > 0] = pobs_nf[pobs_nf > 0] / (
+            pobs_f[pobs_nf > 0] + pobs_nf[pobs_nf > 0]
+        )
         # apply block weighting function
         pobs_nf[pobs_nf < bwf[0]] = bwf[0]
         pobs_nf[pobs_nf > bwf[1]] = bwf[1]
@@ -182,7 +194,9 @@ def calc_posterior(prior, likelihood):
     Returns:
         float: The posterior probability of a pixel being non forest given an observed data point.
     """
-    return (prior * likelihood) / ((prior * likelihood) + ((1 - prior) * (1 - likelihood)))
+    return (prior * likelihood) / (
+        (prior * likelihood) + ((1 - prior) * (1 - likelihood))
+    )
 
 
 def create_bayts_ts(timeseries):
@@ -198,7 +212,9 @@ def create_bayts_ts(timeseries):
     """
     # refined cpnf for dates with observation of s1vv and lndvi
     # lines 68-77 jreiche bayts
-    refined_cpnf_two_obs = calc_posterior(timeseries["cpnf_s1vv"], timeseries["cpnf_lndvi"])
+    refined_cpnf_two_obs = calc_posterior(
+        timeseries["cpnf_s1vv"], timeseries["cpnf_lndvi"]
+    )
     # where we have ndvi observations, we want to use the refined cpnf since ndvi is more related to deforestation than backscatter
     timeseries["cpnf_s1vv_refined"] = xr.where(
         timeseries["cpnf_s1vv"].notnull() & timeseries["cpnf_lndvi"].notnull(),
@@ -207,7 +223,9 @@ def create_bayts_ts(timeseries):
     )
     # where we don't have backscatter but we have ndvi, we want to use ndvi cpnf
     nan_s1vv = timeseries["cpnf_s1vv_refined"].isnull()
-    bayts = xr.where(nan_s1vv, timeseries["cpnf_lndvi"], timeseries["cpnf_s1vv_refined"])
+    bayts = xr.where(
+        nan_s1vv, timeseries["cpnf_lndvi"], timeseries["cpnf_s1vv_refined"]
+    )
     # any nans left in the output should be from image boundary issues or quality masking
     return bayts
 
@@ -262,16 +280,18 @@ def bayts_update_ufunc(
     else:
         pixel_ts_nonan = pixel_ts[~np.isnan(pixel_ts)]
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
-        flag_status = update_pixel_ufunc(pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
-        is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array("Confirmed")
+        flag_status = update_pixel_ufunc(
+            pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min
+        )
+        is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array(
+            "Confirmed"
+        )
+        flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
         if np.any(is_confirmed_flagged_change_ts):
-            flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
-            flagged_change_full_size[~np.isnan(pixel_ts)] = is_confirmed_flagged_change_ts
-            # otherwise, no detected change, each obs in this time series stays flagged as False
-            # we can return pixel_ts with anther version of this function for debugging purposes
-            return flagged_change_full_size
-        else:
-            return initial_flag
+            flagged_change_full_size[
+                ~np.isnan(pixel_ts)
+            ] = is_confirmed_flagged_change_ts
+        return flagged_change_full_size
 
 
 def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
@@ -294,26 +314,24 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     t_plus_one_obs_used_for_updating = 0
     for ind in possible_nf_indices:
         for t in range(int(ind), len(pixel_ts)):
-            tt = int(ind + t - 1)  # true t
             if t == 0:
                 # We assume equal probability, using .5 for an inserted t-1 if t is 0
                 prior = 0.5
-            elif flag_status[tt - 1] == "NoFlg":
-                prior = pixel_ts[tt - 1]
+            elif flag_status[t - 1] == "NoFlg":
+                prior = pixel_ts[t - 1]
                 t_plus_one_obs_used_for_updating = 0
-            elif flag_status[tt - 1] == "Flag":
-                prior = pixel_ts[tt - 1]
+            elif flag_status[t - 1] == "Flag":
+                prior = pixel_ts[t - 1]
                 t_plus_one_obs_used_for_updating += 1
             else:
                 raise ValueError(
-                    f"the flag_status at tt-1 should be NoFlg or Flag but was {flag_status[tt - 1]}"
+                    f"the flag_status at tt-1 should be NoFlg or Flag but was {flag_status[t- 1]}"
                 )
-            likelihood = pixel_ts[tt]
+            likelihood = pixel_ts[t]
             posterior = calc_posterior(prior, likelihood)
-            pixel_ts[
-                tt
-            ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
-            flag_status[tt] = "Flag"
+            # in the next time step, if it is reached, the posterior will be the prior
+            pixel_ts[t] = posterior
+            flag_status[t] = "Flag"
             # Confirm and reject flagged changes
             if t_plus_one_obs_used_for_updating > 0:
                 if posterior < cpnf_min:
@@ -322,18 +340,21 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
                     # next possible deforested detection in the time series. Or stop if we are out of
                     # possible detections
                     flag_status = np.char.array(flag_status)
-                    flag_status[tt - t_plus_one_obs_used_for_updating : tt + 1] = "NoFlg"
+                    flag_status[t - t_plus_one_obs_used_for_updating : t + 1] = "NoFlg"
+                    flag_status = flag_status.tolist()
                     break
-                if posterior >= chi and original_pixel_ts[tt] >= cpnf_min:
+                if posterior >= chi and original_pixel_ts[t] >= cpnf_min:
                     # if the previously flagged observation gets posterior computed and it is above the
                     # threshold, we flag it and stop searching this time series for a high confidence
                     # deforestation event (as determined by chi) deforestation event. We also set all other
                     # observations to False in this time series.
                     first_date_index_flagged = flag_status.index("Flag")
                     flag_status[first_date_index_flagged] = "Confirmed"
+                    assert flag_status.count("Confirmed") == 1
                     return flag_status
             # If the posterior is greater than the cpnf_min but less than chi,
             # we need to keep searching the time series.
+    assert flag_status.count("Confirmed") == 0
     return flag_status  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
@@ -372,7 +393,9 @@ def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
                     ][-1]
                     # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
                     after_monitor_start_t_minus_1 = date_index > monitor_start_t_minus_1
-                    after_monitor_start_t_minus_1_indices = np.where(after_monitor_start_t_minus_1)
+                    after_monitor_start_t_minus_1_indices = np.where(
+                        after_monitor_start_t_minus_1
+                    )
                     pixel_ts = pixel_ts[after_monitor_start_t_minus_1]
                     initial_change_ts = initial_change_ts[after_monitor_start_t_minus_1]
                     is_confirmed_flagged_change_ts = bayts_update_ufunc(
@@ -383,8 +406,12 @@ def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
                         after_monitor_start_t_minus_1_indices, y, x
                     ] = is_confirmed_flagged_change_ts
                 else:
-                    flagged_change_ts = bayts_update_ufunc(pixel_ts, initial_change_ts, 0.5, 0.5)
-                    flagged_change_output[:, y, x] = flagged_change_ts[after_monitor_start]
+                    flagged_change_ts = bayts_update_ufunc(
+                        pixel_ts, initial_change_ts, 0.5, 0.5
+                    )
+                    flagged_change_output[:, y, x] = flagged_change_ts[
+                        after_monitor_start
+                    ]
     if monitor_start:
         return flagged_change_output[after_monitor_start]
     else:
