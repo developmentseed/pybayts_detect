@@ -292,31 +292,42 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     flagged_change = initial_flag.copy()
     possible_nf_indices = np.argwhere(initial_flag)
     # for each observation, we update it starting from the observation and it's next future neighbor
+    flag_status = np.char.array(flagged_change)  # change to a list get byte to str
+    true_mask = np.full_like(flag_status, "True")
+    noflag_mask = np.full_like(flag_status, "NoFlg")
+    flagged_mask = np.full_like(flag_status, "Flag")
+    confirmed_mask = np.full_like(flag_status, "Conf")
+    flag_status = np.where(flag_status == true_mask, flagged_mask, noflag_mask)
     for ind in possible_nf_indices:
         for t in range(int(ind), len(pixel_ts)):
-            if t == 0:
-                # can't update this observation base don t-1 if t is 0
-                posterior = pixel_ts[t]
-            else:
-                prior = pixel_ts[t - 1]
-                likelihood = pixel_ts[t]
-                posterior = calc_posterior(prior, likelihood)
-            pixel_ts[
-                t
-            ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
-            if posterior >= chi:
-                # if the previously flagged observation gets posterior computed and it is above the
-                # threshold, we flag it and stop searching this time series for a high confidence
-                # deforestation event (as determined by chi) deforestation event. We also set all other
-                # observations to False in this time series.
-                return set_flagged_change(flagged_change, t)
-            elif posterior < cpnf_min or t == len(pixel_ts):
-                # if the previously flagged observation gets posterior computed and it is below the
-                # threshold or if all possible updates have been made, we unflag it and go on to the
-                # next possible deforested detection in the time series. Or stop if we are out of
-                # possible detections
-                flagged_change[t] = False
-                break
+            if flag_status[t] == "NoFlg":
+                if t == 0:
+                    # We assume equal probability, using .5 for an inserted t-1 if t is 0
+                    prior = 0.5
+                    likelihood = pixel_ts[t]
+                    posterior = calc_posterior(prior, likelihood)
+                else:
+                    prior = pixel_ts[t - 1]
+                    likelihood = pixel_ts[t]
+                    posterior = calc_posterior(prior, likelihood)
+                pixel_ts[
+                    t
+                ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
+                flag_status[t] = "Flag"
+            if flag_status[t] == "Flag":
+                if posterior >= chi:
+                    # if the previously flagged observation gets posterior computed and it is above the
+                    # threshold, we flag it and stop searching this time series for a high confidence
+                    # deforestation event (as determined by chi) deforestation event. We also set all other
+                    # observations to False in this time series.
+                    return set_flagged_change(flagged_change, t)
+                elif posterior < cpnf_min or t == len(pixel_ts):
+                    # if the previously flagged observation gets posterior computed and it is below the
+                    # threshold or if all possible updates have been made, we unflag it and go on to the
+                    # next possible deforested detection in the time series. Or stop if we are out of
+                    # possible detections
+                    flag_status[t] = "NoFlg"
+                    break
             else:
                 # If the posterior is greater than the cpnf_min but less than chi,
                 # we need to keep searching the time series.
