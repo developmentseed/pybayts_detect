@@ -264,7 +264,7 @@ def bayts_update_ufunc(
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
         flag_status = update_pixel_ufunc(pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
         is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array("Confirmed")
-        if np.any(flagged_change):
+        if np.any(is_confirmed_flagged_change_ts):
             flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
             flagged_change_full_size[~np.isnan(pixel_ts)] = is_confirmed_flagged_change_ts
             # otherwise, no detected change, each obs in this time series stays flagged as False
@@ -294,22 +294,21 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     t_plus_one_obs_used_for_updating = 0
     for ind in possible_nf_indices:
         for t in range(int(ind), len(pixel_ts)):
-            tt = int(ind + t)  # true t
+            tt = int(ind + t - 1)  # true t
             if t == 0:
                 # We assume equal probability, using .5 for an inserted t-1 if t is 0
                 prior = 0.5
-                likelihood = pixel_ts[tt]
-                posterior = calc_posterior(prior, likelihood)
             elif flag_status[tt - 1] == "NoFlg":
+                prior = pixel_ts[tt - 1]
                 t_plus_one_obs_used_for_updating = 0
             elif flag_status[tt - 1] == "Flag":
+                prior = pixel_ts[tt - 1]
                 t_plus_one_obs_used_for_updating += 1
             else:
                 raise ValueError(
                     f"the flag_status at tt-1 should be NoFlg or Flag but was {flag_status[tt - 1]}"
                 )
-            prior = pixel_ts[tt - 1]
-            likelihood = pixel_ts[t]
+            likelihood = pixel_ts[tt]
             posterior = calc_posterior(prior, likelihood)
             pixel_ts[
                 tt
@@ -324,7 +323,6 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
                     # possible detections
                     flag_status = np.char.array(flag_status)
                     flag_status[tt - t_plus_one_obs_used_for_updating : tt + 1] = "NoFlg"
-                    flag_status = [status.decode("UTF-8") for status in flag_status]
                     break
                 if posterior >= chi and original_pixel_ts[tt] >= cpnf_min:
                     # if the previously flagged observation gets posterior computed and it is above the
