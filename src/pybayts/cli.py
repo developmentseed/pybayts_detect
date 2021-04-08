@@ -17,6 +17,7 @@ Why does this file exist, and why not put this in __main__?
 from datetime import datetime
 
 import click
+import rioxarray as rx
 import xarray as xr
 
 from pybayts.bayts import bayts_da_to_date_array
@@ -83,6 +84,15 @@ def main(vv_folder, ndvi_folder):
     date_index_arr, actual_dates, decimal_yr_arr = bayts_da_to_date_array(baytsds)
 
     print(f"decimal_yr_arr: {decimal_yr_arr}")
+
+    masked_bayts_r = rx.open_rasterio(
+        "/home/rave/ms-sar/ms-sar-deforestation-internal/data/baytsdata/bayts_spatial_result.tif",
+        masked=True,
+    )
+    r_results_ds = masked_bayts_r.to_dataset(dim="band")
+    r_results_ds["py_decimal_years"] = (("y", "x"), decimal_yr_arr)
+    decimal_yr_diff = r_results_ds["py_decimal_years"] - masked_bayts_r.sel(band=3)
+    print(decimal_yr_diff)
 
 
 if __name__ == "__main__":

@@ -280,17 +280,18 @@ def bayts_update_ufunc(
     else:
         pixel_ts_nonan = pixel_ts[~np.isnan(pixel_ts)]
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
-        flagged_change = update_pixel_ufunc(
+        flag_status = update_pixel_ufunc(
             pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min
         )
-        if np.any(flagged_change):
-            flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
-            flagged_change_full_size[~np.isnan(pixel_ts)] = flagged_change
-            # otherwise, no detected change, each obs in this time series stays flagged as False
-            # we can return pixel_ts with anther version of this function for debugging purposes
-            return flagged_change_full_size
-        else:
-            return initial_flag
+        is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array(
+            "Confirmed"
+        )
+        flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
+        if np.any(is_confirmed_flagged_change_ts):
+            flagged_change_full_size[
+                ~np.isnan(pixel_ts)
+            ] = is_confirmed_flagged_change_ts
+        return flagged_change_full_size
 
 
 def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
@@ -300,46 +301,61 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
         pixel_ts (np.array): A numpy array with a single (date) dimension containing the probabilities that are to be updated.
         initial_flag (np.array): The initially flagged nonforest observations that are updated to be False if not above chi or True if above chi.
     """
-
-    def set_flagged_change(flagged_change, t):
-        flagged_change[t] = True
-        if t < len(flagged_change):
-            flagged_change[t + 1 :] = False
-        if t > 0:
-            flagged_change[: t - 1] = False
-        return flagged_change
-
+    original_pixel_ts = pixel_ts.copy()
     flagged_change = initial_flag.copy()
     possible_nf_indices = np.argwhere(initial_flag)
     # for each observation, we update it starting from the observation and it's next future neighbor
+    flag_status = np.char.array(flagged_change)  # change to a list get byte to str
+    true_mask = np.full_like(flag_status, "True")
+    noflag_mask = np.full_like(flag_status, "NoFlg")
+    flagged_mask = np.full_like(flag_status, "Flag")
+    flag_status = np.where(flag_status == true_mask, flagged_mask, noflag_mask)
+    flag_status = [status.decode("UTF-8") for status in flag_status]
+    t_plus_one_obs_used_for_updating = 0
     for ind in possible_nf_indices:
         for t in range(int(ind), len(pixel_ts)):
-            if pixel_ts[t] >= chi and t == 0:
-                return set_flagged_change(flagged_change, t)
-            prior = pixel_ts[t - 1]
+            if t == 0:
+                # We assume equal probability, using .5 for an inserted t-1 if t is 0
+                prior = 0.5
+            elif flag_status[t - 1] == "NoFlg":
+                prior = pixel_ts[t - 1]
+                t_plus_one_obs_used_for_updating = 0
+            elif flag_status[t - 1] == "Flag":
+                prior = pixel_ts[t - 1]
+                t_plus_one_obs_used_for_updating += 1
+            else:
+                raise ValueError(
+                    f"the flag_status at tt-1 should be NoFlg or Flag but was {flag_status[t- 1]}"
+                )
             likelihood = pixel_ts[t]
             posterior = calc_posterior(prior, likelihood)
-            pixel_ts[
-                t
-            ] = posterior  # in the next time step, if it is reached, the posterior will be the prior
-            if posterior >= chi:
-                # if the previously flagged observation gets posterior computed and it is above the
-                # threshold, we flag it and stop searching this time series for a high confidence
-                # deforestation event (as determined by chi) deforestation event. We also set all other
-                # observations to False in this time series.
-                return set_flagged_change(flagged_change, t)
-            elif posterior < cpnf_min or t == len(pixel_ts):
-                # if the previously flagged observation gets posterior computed and it is below the
-                # threshold or if all possible updates have been made, we unflag it and go on to the
-                # next possible deforested detection in the time series. Or stop if we are out of
-                # possible detections
-                flagged_change[t] = False
-                break
-            else:
-                # If the posterior is greater than the cpnf_min but less than chi,
-                # we need to keep searching the time series.
-                pass
-    return flagged_change  # this is returned if none of the initially flagged observations were confirmed with chi
+            # in the next time step, if it is reached, the posterior will be the prior
+            pixel_ts[t] = posterior
+            flag_status[t] = "Flag"
+            # Confirm and reject flagged changes
+            if t_plus_one_obs_used_for_updating > 0:
+                if posterior < cpnf_min:
+                    # if the previously flagged observation gets posterior computed and it is below the
+                    # threshold or if all possible updates have been made, we unflag it and go on to the
+                    # next possible deforested detection in the time series. Or stop if we are out of
+                    # possible detections
+                    flag_status = np.char.array(flag_status)
+                    flag_status[t - t_plus_one_obs_used_for_updating : t + 1] = "NoFlg"
+                    flag_status = flag_status.tolist()
+                    break
+                if posterior >= chi and original_pixel_ts[t] >= cpnf_min:
+                    # if the previously flagged observation gets posterior computed and it is above the
+                    # threshold, we flag it and stop searching this time series for a high confidence
+                    # deforestation event (as determined by chi) deforestation event. We also set all other
+                    # observations to False in this time series.
+                    first_date_index_flagged = flag_status.index("Flag")
+                    flag_status[first_date_index_flagged] = "Confirmed"
+                    assert flag_status.count("Confirmed") == 1
+                    return flag_status
+            # If the posterior is greater than the cpnf_min but less than chi,
+            # we need to keep searching the time series.
+    assert flag_status.count("Confirmed") == 0
+    return flag_status  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
 def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
@@ -357,26 +373,49 @@ def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
             NOTE: If monitor_start is used, this needs to be assigned to an xarray DataArray with the same dimensions later
             so that dates are properly assigned to the True booleans.
     """
-    if monitor_start:
-        # used to truncate a monitoring period to focus on latter part of timeseries
-        date_i = np.array(list(range(0, len(date_index))))
-        date_i = date_i[date_index > np.datetime64(monitor_start)]
-        monitor_start = date_i[0]
-        bayts = bayts[monitor_start:]
-        initial_change = initial_change[monitor_start:]
+    flagged_change_output = initial_change.copy()
+    after_monitor_start = date_index > np.datetime64(monitor_start)
     for y in tqdm(range(bayts.shape[1])):
         for x in range(bayts.shape[2]):
             pixel_ts = bayts[:, y, x]
+            nanmask = np.isnan(pixel_ts)
             initial_change_ts = initial_change[:, y, x]
             # don't update if all values are nan
-            if np.isnan(pixel_ts).all():
+            if nanmask.all():
                 pass
             else:
-                flagged_change_ts = bayts_update_ufunc(
-                    pixel_ts, initial_change_ts, 0.5, 0.5
-                )
-                initial_change[:, y, x] = flagged_change_ts
-    return initial_change
+                if monitor_start:
+                    # used to truncate a monitoring period to focus on latter part of timeseries. needs to happen in loop since
+                    # we need to include the observation that is before and closest to the monitor start date and this
+                    # can occur at a variable date
+                    monitor_start_t_minus_1 = date_index[~nanmask][
+                        date_index[~nanmask] < np.datetime64(monitor_start)
+                    ][-1]
+                    # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
+                    after_monitor_start_t_minus_1 = date_index > monitor_start_t_minus_1
+                    after_monitor_start_t_minus_1_indices = np.where(
+                        after_monitor_start_t_minus_1
+                    )
+                    pixel_ts = pixel_ts[after_monitor_start_t_minus_1]
+                    initial_change_ts = initial_change_ts[after_monitor_start_t_minus_1]
+                    is_confirmed_flagged_change_ts = bayts_update_ufunc(
+                        pixel_ts, initial_change_ts, 0.5, 0.5
+                    )
+
+                    flagged_change_output[
+                        after_monitor_start_t_minus_1_indices, y, x
+                    ] = is_confirmed_flagged_change_ts
+                else:
+                    flagged_change_ts = bayts_update_ufunc(
+                        pixel_ts, initial_change_ts, 0.5, 0.5
+                    )
+                    flagged_change_output[:, y, x] = flagged_change_ts[
+                        after_monitor_start
+                    ]
+    if monitor_start:
+        return flagged_change_output[after_monitor_start]
+    else:
+        return flagged_change_output
 
 
 def bayts_da_to_date_array(flagged_change):
