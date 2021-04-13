@@ -33,6 +33,8 @@ from pybayts.data.io import read_and_stack_example_tifs
 @click.argument("ndvi_folder")
 def main(vv_folder, ndvi_folder):
     """Main function for cli."""
+    chi = 0.9
+    cpnf_min = 0.5
     pdf_type_l = ("gaussian", "gaussian")
     pdf_forest_l = (0, 0.1)  # mean and sd
     pdf_nonforest_l = (-0.5, 0.125)  # mean and sd
@@ -73,6 +75,8 @@ def main(vv_folder, ndvi_folder):
         bayts.data,
         initial_change.data,
         initial_change.date.values,
+        chi,
+        cpnf_min,
         monitor_start,
     )
     bayts.name = "bayts"

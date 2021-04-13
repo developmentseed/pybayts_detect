@@ -307,6 +307,8 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
             # in the next time step, if it is reached, the posterior will be the prior
             pixel_ts[t] = posterior
             flag_status[t] = "Flag"
+            if pixel_ts[0] < 0.2:
+                b = 1
             # Confirm and reject flagged changes
             if t_plus_one_obs_used_for_updating > 0 and posterior < cpnf_min:
                 # if the previously flagged observation gets posterior computed and it is below the
@@ -316,6 +318,8 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
                 flag_status = np.char.array(flag_status)
                 flag_status[t - t_plus_one_obs_used_for_updating : t + 1] = "NoFl"
                 flag_status = flag_status.tolist()
+                if pixel_ts[0] < 0.2:
+                    b = 1
                 break
             if posterior >= chi and original_pixel_ts[t] >= cpnf_min:
                 # if the previously flagged observation gets posterior computed and it is above the
@@ -324,6 +328,8 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
                 # observations to False in this time series if they are not "Confirmed".
                 first_date_index_flagged = flag_status.index("Flag")
                 flag_status[first_date_index_flagged] = "Confirmed"
+                if pixel_ts[0] < 0.2:
+                    b = 1
                 assert flag_status.count("Confirmed") == 1
                 return flag_status
             # If the posterior is greater than the cpnf_min but less than chi,
@@ -332,7 +338,7 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     return flag_status  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
-def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
+def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_start=None):
     """Loop through pixels to update each pixel time series probabilities. Used for debugging.
 
     Args:
@@ -387,14 +393,23 @@ def loop_bayts_update(bayts, initial_change, date_index, monitor_start=None):
                         # we don't consider the observation before the monitoring start date, we only use it for updating
                         initial_change_ts[0] = False
                     is_confirmed_flagged_change_ts = bayts_update_ufunc(
-                        pixel_ts, initial_change_ts, 0.5, 0.5
+                        pixel_ts, initial_change_ts, chi, cpnf_min
                     )
-
+                    # we only want the output that occurs after the monitor start
+                    confirmed_date = dates_to_decimal_years(
+                        date_index[date_index > monitor_start_t_minus_1][
+                            is_confirmed_flagged_change_ts
+                        ]
+                    )
                     flagged_change_output[
-                        after_monitor_start_t_minus_1_indices, y, x
-                    ] = is_confirmed_flagged_change_ts
+                        after_monitor_start_t_minus_1_indices[0][1:], y, x
+                    ] = is_confirmed_flagged_change_ts[1:]
+                    if pixel_ts[0] < 0.2:
+                        b = 1
                 else:
-                    flagged_change_ts = bayts_update_ufunc(pixel_ts, initial_change_ts, 0.5, 0.5)
+                    flagged_change_ts = bayts_update_ufunc(
+                        pixel_ts, initial_change_ts, chi, cpnf_min
+                    )
                     flagged_change_output[:, y, x] = flagged_change_ts[after_monitor_start]
     if monitor_start:
         return flagged_change_output[after_monitor_start]
