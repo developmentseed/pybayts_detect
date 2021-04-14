@@ -305,7 +305,7 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
                 raise ValueError(
                     f"the flag_status at t-1 should be NoFl or Flag but was {flag_status[t- 1]}"
                 )
-            likelihood = pixel_ts[t]
+            likelihood = original_pixel_ts[t]
             posterior = calc_posterior(prior, likelihood)
             # in the next time step, if it is reached, the posterior will be the prior
             pixel_ts[t] = posterior
