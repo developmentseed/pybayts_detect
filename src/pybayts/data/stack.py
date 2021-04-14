@@ -87,9 +87,7 @@ def create_two_timeseries(
             ndvi_paths.append(ndvi_path)
         print("Total", time.time() - start)
 
-    ndvi_ts = group_merge_stack(
-        ndvi_paths, aoi_grid_ds, l8_merged_ndvi_outfolder_dir, date_index=3
-    )
+    ndvi_ts = group_merge_stack(ndvi_paths, aoi_grid_ds, l8_merged_ndvi_outfolder_dir, date_index=3)
 
     sfolders = list(Path(sentinel_in_folder).glob("*"))
     sentinel_paths = sentinel_paths_for_aoi_csv(
@@ -148,14 +146,10 @@ def scene_id_to_ndvi_arr(outdir: str, b4_path: str, b5_path: str) -> str:
     # https://corteva.github.io/rioxarray/stable/examples/read-locks.html
     with rio.open_rasterio(
         b4_path, masked=True, lock=False, chunks=(1, "auto", -1)
-    ) as red, rio.open_rasterio(
-        b5_path, masked=True, lock=False, chunks=(1, "auto", -1)
-    ) as nir:
+    ) as red, rio.open_rasterio(b5_path, masked=True, lock=False, chunks=(1, "auto", -1)) as nir:
         calc_ndvi = (nir - red) / (nir + red)
         ndvi_path = os.path.join(outdir, scene_id_b4 + "_NDVI.tif")
-        qa_path = (
-            b4_path.split("SR_B4")[0] + "QA_PIXEL.TIF" + "?" + b4_path.split("?")[1]
-        )
+        qa_path = b4_path.split("SR_B4")[0] + "QA_PIXEL.TIF" + "?" + b4_path.split("?")[1]
         clear_mask = get_clear_qa_mask(qa_path)
         calc_ndvi.where(clear_mask).rio.to_raster(ndvi_path)
         return ndvi_path
@@ -192,9 +186,7 @@ def groupby_date(scenes: List[str]) -> List[List]:
     if "landsateuwest" in scenes[0] or "l8processed" in scenes[0]:
         group_dict = groupedby(scenes, key=lambda x: x.split("/")[-1].split("_")[3])
     elif "RTC30" in scenes[0]:
-        group_dict = groupedby(
-            scenes, key=lambda x: x.split("/")[-1].split("_")[2][0:8]
-        )
+        group_dict = groupedby(scenes, key=lambda x: x.split("/")[-1].split("_")[2][0:8])
     elif "NDVI" in scenes[0]:
         group_dict = groupedby(scenes, key=lambda x: x.split("/")[-1].split("_")[3])
     else:
@@ -369,7 +361,7 @@ def group_merge_stack(paths, aoi_grid_ds, merged_outfolder_dir, date_index=3):
         aoi_grid_ds (xarray.DataArray): The DataArray representing the AOI.
         merged_outfolder_dir (str): Directory to save merged day scenes.
         date_index (int, optional): The position between "_" of the date string in filename.
-            Defaults to 3 for LAndsat, should be 2 for Sentinel-1.
+            Defaults to 3 for Landsat, should be 2 for Sentinel-1.
 
     Returns:
         xarray.DataArray: The time series.

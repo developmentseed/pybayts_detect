@@ -231,7 +231,7 @@ def subset_by_midpoint(bayts):
 
 
 def bayts_update_ufunc(
-    pixel_ts: np.array, initial_flag: np.array, chi: float, cpnf_min: float
+    y, x, pixel_ts: np.array, initial_flag: np.array, chi: float, cpnf_min: float
 ) -> Tuple:
     """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
 
@@ -262,7 +262,7 @@ def bayts_update_ufunc(
     else:
         pixel_ts_nonan = pixel_ts[~np.isnan(pixel_ts)]
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
-        flag_status = update_pixel_ufunc(pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
+        flag_status = update_pixel_ufunc(y, x, pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
         is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array("Confirmed")
         flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
         if np.any(is_confirmed_flagged_change_ts):
@@ -270,7 +270,7 @@ def bayts_update_ufunc(
         return flagged_change_full_size
 
 
-def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
+def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float):
     """Modifies a single pixel view of a spatial timeseries to update the probabilities.
 
     Args:
@@ -291,9 +291,12 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     # ind should never be 0 or t-1 doesn't work
     for ind in possible_nf_indices:
         assert ind != 0
+        if y == 0 and x == 96:
+            b = 1
         for t in range(int(ind), len(pixel_ts)):
             if flag_status[t - 1] == "NoFl":
-                prior = pixel_ts[t - 1]
+                # don't use prior from previous updating of pixel_ts if there has been any
+                prior = original_pixel_ts[t - 1]
                 t_plus_one_obs_used_for_updating = 0
             elif flag_status[t - 1] == "Flag":
                 prior = pixel_ts[t - 1]
@@ -307,7 +310,7 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
             # in the next time step, if it is reached, the posterior will be the prior
             pixel_ts[t] = posterior
             flag_status[t] = "Flag"
-            if pixel_ts[0] < 0.2:
+            if y == 0 and x == 96:
                 b = 1
             # Confirm and reject flagged changes
             if t_plus_one_obs_used_for_updating > 0 and posterior < cpnf_min:
@@ -316,9 +319,9 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
                 # next possible deforested detection in the time series. Or stop if we are out of
                 # possible detections
                 flag_status = np.char.array(flag_status)
-                flag_status[t - t_plus_one_obs_used_for_updating : t + 1] = "NoFl"
+                flag_status[int(ind) : t + 1] = "NoFl"
                 flag_status = flag_status.tolist()
-                if pixel_ts[0] < 0.2:
+                if y == 0 and x == 96:
                     b = 1
                 break
             if posterior >= chi and original_pixel_ts[t] >= cpnf_min:
@@ -328,7 +331,7 @@ def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
                 # observations to False in this time series if they are not "Confirmed".
                 first_date_index_flagged = flag_status.index("Flag")
                 flag_status[first_date_index_flagged] = "Confirmed"
-                if pixel_ts[0] < 0.2:
+                if y == 0 and x == 96:
                     b = 1
                 assert flag_status.count("Confirmed") == 1
                 return flag_status
@@ -393,7 +396,7 @@ def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_
                         # we don't consider the observation before the monitoring start date, we only use it for updating
                         initial_change_ts[0] = False
                     is_confirmed_flagged_change_ts = bayts_update_ufunc(
-                        pixel_ts, initial_change_ts, chi, cpnf_min
+                        y, x, pixel_ts, initial_change_ts, chi, cpnf_min
                     )
                     # we only want the output that occurs after the monitor start
                     confirmed_date = dates_to_decimal_years(
@@ -404,7 +407,7 @@ def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_
                     flagged_change_output[
                         after_monitor_start_t_minus_1_indices[0][1:], y, x
                     ] = is_confirmed_flagged_change_ts[1:]
-                    if pixel_ts[0] < 0.2:
+                    if y == 0 and x == 96:
                         b = 1
                 else:
                     flagged_change_ts = bayts_update_ufunc(
