@@ -291,8 +291,6 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
     # ind should never be 0 or t-1 doesn't work
     for ind in possible_nf_indices:
         assert ind != 0
-        if y == 0 and x == 96:
-            b = 1
         for t in range(int(ind), len(pixel_ts)):
             if flag_status[t - 1] == "NoFl":
                 # don't use prior from previous updating of pixel_ts if there has been any
@@ -310,7 +308,7 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
             # in the next time step, if it is reached, the posterior will be the prior
             pixel_ts[t] = posterior
             flag_status[t] = "Flag"
-            if y == 0 and x == 96:
+            if y == 50 and x == 63:
                 b = 1
             # Confirm and reject flagged changes
             if t_plus_one_obs_used_for_updating > 0 and posterior < cpnf_min:
@@ -321,7 +319,7 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
                 flag_status = np.char.array(flag_status)
                 flag_status[int(ind) : t + 1] = "NoFl"
                 flag_status = flag_status.tolist()
-                if y == 0 and x == 96:
+                if y == 50 and x == 63:
                     b = 1
                 break
             if posterior >= chi and original_pixel_ts[t] >= cpnf_min:
@@ -330,14 +328,13 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
                 # deforestation event (as determined by chi) deforestation event. Later, we also set all other
                 # observations to False in this time series if they are not "Confirmed".
                 first_date_index_flagged = flag_status.index("Flag")
-                flag_status[first_date_index_flagged] = "Confirmed"
-                if y == 0 and x == 96:
+                for i in range(first_date_index_flagged, t + 1):
+                    flag_status[i] = "Confirmed"
+                if y == 50 and x == 63:
                     b = 1
-                assert flag_status.count("Confirmed") == 1
                 return flag_status
             # If the posterior is greater than the cpnf_min but less than chi,
             # we need to keep searching the time series.
-    assert flag_status.count("Confirmed") == 0
     return flag_status  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
@@ -407,7 +404,7 @@ def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_
                     flagged_change_output[
                         after_monitor_start_t_minus_1_indices[0][1:], y, x
                     ] = is_confirmed_flagged_change_ts[1:]
-                    if y == 0 and x == 96:
+                    if y == 50 and x == 63:
                         b = 1
                 else:
                     flagged_change_ts = bayts_update_ufunc(
