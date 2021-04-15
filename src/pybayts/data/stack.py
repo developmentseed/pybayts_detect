@@ -369,7 +369,7 @@ def group_merge_stack(paths, aoi_grid_ds, merged_outfolder_dir, date_index=3):
         aoi_grid_ds (xarray.DataArray): The DataArray representing the AOI.
         merged_outfolder_dir (str): Directory to save merged day scenes.
         date_index (int, optional): The position between "_" of the date string in filename.
-            Defaults to 3 for LAndsat, should be 2 for Sentinel-1.
+            Defaults to 3 for Landsat, should be 2 for Sentinel-1.
 
     Returns:
         xarray.DataArray: The time series.
