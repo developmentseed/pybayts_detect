@@ -231,7 +231,7 @@ def subset_by_midpoint(bayts):
 
 
 def bayts_update_ufunc(
-    y, x, pixel_ts: np.array, initial_flag: np.array, chi: float, cpnf_min: float
+    pixel_ts: np.array, initial_flag: np.array, chi: float, cpnf_min: float
 ) -> Tuple:
     """Iterates through each pixel time series to refine the conditional non-forest probability using bayesian updating.
 
@@ -262,7 +262,7 @@ def bayts_update_ufunc(
     else:
         pixel_ts_nonan = pixel_ts[~np.isnan(pixel_ts)]
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
-        flag_status = update_pixel_ufunc(y, x, pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
+        flag_status = update_pixel_ufunc(pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
         is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array("Confirmed")
         flagged_change_with_nans = np.zeros(pixel_ts.shape, dtype=bool)
         if np.any(is_confirmed_flagged_change_ts):
@@ -281,7 +281,7 @@ def create_flag_status_arr(flagged_change):
     return flag_status
 
 
-def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float):
+def update_pixel_ufunc(pixel_ts, initial_flag, chi: float, cpnf_min: float):
     """Modifies a single pixel view of a spatial timeseries to update the probabilities.
 
     Args:
@@ -313,8 +313,6 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
             # in the next time step, if it is reached, the posterior will be the prior
             pixel_ts[t] = posterior
             flag_status[t] = "Flag"
-            if y == 50 and x == 63:
-                b = 1
             # Confirm and reject flagged changes
             if t_plus_one_obs_used_for_updating > 0 and posterior < cpnf_min:
                 # if the previously flagged observation gets posterior computed and it is below the
@@ -324,8 +322,6 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
                 flag_status = np.char.array(flag_status)
                 flag_status[int(ind) : t + 1] = "NoFl"
                 flag_status = flag_status.tolist()
-                if y == 50 and x == 63:
-                    b = 1
                 break
             if posterior >= chi and original_pixel_ts[t] >= cpnf_min:
                 # if the previously flagged observation gets posterior computed and it is above the
@@ -335,48 +331,45 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
                 first_date_index_flagged = flag_status.index("Flag")
                 for i in range(first_date_index_flagged, t + 1):
                     flag_status[i] = "Confirmed"
-                if y == 50 and x == 63:
-                    b = 1
                 return flag_status
             # If the posterior is greater than the cpnf_min but less than chi,
             # we need to keep searching the time series.
     return flag_status  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
-def run_bayts_with_monitor_start(pixel_ts, initial_change_ts, nanmask, date_index, monitor_start):
+def run_bayts_with_monitor_start(
+    pixel_ts,
+    initial_change_ts,
+    nanmask,
+    date_index,
+    monitor_start,
+    chi,
+    cpnf_min,
+    flagged_change_output,
+):
+    bayts_date_index = date_index.copy()
     # used to truncate a monitoring period to focus on latter part of timeseries. needs to happen in loop since
     # we need to include the observation that is before and closest to the monitor start date and this
     # can occur at a variable date
     dates_before_monitoring = date_index[~nanmask][
         date_index[~nanmask] < np.datetime64(monitor_start)
     ]
-    monitor_start_t_minus_1 = dates_before_monitoring[-2]
     if len(dates_before_monitoring) == 0:
-        pixel_ts = np.concatenate([0.5], pixel_ts)
-        initial_change_ts = np.concatenate([False], initial_change_ts)
-        after_monitor_start_t_minus_1 = date_index >= monitor_start_t_minus_1
-        after_monitor_start_t_minus_1 = np.concatenate([False], after_monitor_start_t_minus_1)
-        after_monitor_start_t_minus_1_indices = np.where(after_monitor_start_t_minus_1)
-    else:
-        # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
-        after_monitor_start_t_minus_1 = date_index > monitor_start_t_minus_1
-        after_monitor_start_t_minus_1_indices = np.where(after_monitor_start_t_minus_1)
-        pixel_ts = pixel_ts[after_monitor_start_t_minus_1]
-        initial_change_ts = initial_change_ts[after_monitor_start_t_minus_1]
-        # we don't consider the observation before the monitoring start date, we only use it for updating
-        initial_change_ts[0] = False
+        monitored_pixel_ts = np.concatenate([0.5], pixel_ts)
+        monitored_initial_change_ts = np.concatenate([False], initial_change_ts)
+        bayts_date_index = np.concatenate([bayts_date_index[0] - 1], date_index)
+    monitor_start_t_minus_1 = dates_before_monitoring[-1]
+    # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
+    is_monitored = bayts_date_index >= monitor_start_t_minus_1
+    monitored_pixel_ts = pixel_ts[is_monitored]
+    monitored_initial_change_ts = initial_change_ts[is_monitored]
+    # we don't consider the observation before the monitoring start date, we only use it for updating
+    monitored_initial_change_ts[0] = False
+    # this result only filters the monitoring period
     is_confirmed_flagged_change_ts = bayts_update_ufunc(
-        y, x, pixel_ts, initial_change_ts, chi, cpnf_min
+        monitored_pixel_ts, monitored_initial_change_ts, chi, cpnf_min
     )
-    # we only want the output that occurs after the monitor start
-    confirmed_date = dates_to_decimal_years(
-        date_index[date_index > monitor_start_t_minus_1][is_confirmed_flagged_change_ts]
-    )
-    flagged_change_output[
-        after_monitor_start_t_minus_1_indices[0][1:], y, x
-    ] = is_confirmed_flagged_change_ts[1:]
-    if y == 50 and x == 63:
-        b = 1
+    return is_confirmed_flagged_change_ts, is_monitored
 
 
 def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_start=None):
@@ -405,10 +398,41 @@ def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_
             if nanmask.all():
                 pass
             else:
-                flagged_change_output = run_bayts_with_monitor_start(
-                    pixel_ts, initial_change_ts, nanmask, date_index, monitor_start
+                is_confirmed_flagged_change_ts, is_monitored = run_bayts_with_monitor_start(
+                    pixel_ts,
+                    initial_change_ts,
+                    nanmask,
+                    date_index,
+                    monitor_start,
+                    chi,
+                    cpnf_min,
+                    flagged_change_output,
                 )
+                confirmed_date = dates_to_decimal_years(
+                    date_index[is_monitored][is_confirmed_flagged_change_ts]
+                )
+                is_monitored_indices = np.where(is_monitored)
+                first_date_flagged_arr = bool_to_first_true(is_confirmed_flagged_change_ts[1:])
+                confirmed_date_arr = bool_to_last_true(is_confirmed_flagged_change_ts[1:])
+                flagged_change_output[is_monitored_indices[0][1:], y, x] = confirmed_date_arr
     return flagged_change_output[after_monitor_start]
+
+
+def bool_to_first_true(x):
+    y = np.zeros_like(x)
+    idx = x.argmax()
+    y[idx] = x[idx]
+    return y
+
+
+def bool_to_last_true(x):
+    if x.sum() > 1:
+        y = np.zeros_like(x)
+        idx = np.where(x)[0][-1]
+        y[idx] = x[idx]
+        return y
+    else:
+        return bool_to_first_true(x)
 
 
 def bayts_da_to_date_array(flagged_change):
