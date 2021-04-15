@@ -230,24 +230,6 @@ def create_bayts_ts(timeseries):
     return bayts
 
 
-def subset_by_midpoint(bayts):
-    """Subset the time series to 100x100 width and height
-
-    Args:
-        bayts (numpy.ndarray): The probability time series.
-
-    Returns:
-        numpy.ndarray: The subsetted timeseries.
-    """
-    ymid, xmid = int(bayts.shape[1] / 2), int(bayts.shape[2] / 2)
-    radius = 50
-    baytssubset = bayts.isel(
-        y=slice(ymid - radius, ymid + radius),
-        x=slice(xmid - radius, xmid + radius),
-    )
-    return baytssubset
-
-
 def bayts_update_ufunc(
     pixel_ts: np.array, initial_flag: np.array, chi: float, cpnf_min: float
 ) -> Tuple:
@@ -478,25 +460,6 @@ def loop_bayts_update(
     return flagged_change_output[after_monitor_start]
 
 
-def bool_to_first_true(x):
-    """Helper func to convert array of [False, True, True, True, False] to [False, True, False, False, False]"""
-    y = np.zeros_like(x)
-    idx = x.argmax()
-    y[idx] = x[idx]
-    return y
-
-
-def bool_to_last_true(x):
-    """Helper func to convert array of [False, True, True, True, False] to [False, False, False, True, False]"""
-    if x.sum() > 1:
-        y = np.zeros_like(x)
-        idx = np.where(x)[0][-1]
-        y[idx] = x[idx]
-        return y
-    else:
-        return bool_to_first_true(x)
-
-
 def bayts_da_to_date_array(flagged_change):
     """Processes result from bayts_update, returning array of dates of
         flagged change for the aoi.
@@ -551,6 +514,25 @@ def bayts_da_to_date_array(flagged_change):
     )
 
 
+def bool_to_first_true(x):
+    """Helper func to convert array of [False, True, True, True, False] to [False, True, False, False, False]"""
+    y = np.zeros_like(x)
+    idx = x.argmax()
+    y[idx] = x[idx]
+    return y
+
+
+def bool_to_last_true(x):
+    """Helper func to convert array of [False, True, True, True, False] to [False, False, False, True, False]"""
+    if x.sum() > 1:
+        y = np.zeros_like(x)
+        idx = np.where(x)[0][-1]
+        y[idx] = x[idx]
+        return y
+    else:
+        return bool_to_first_true(x)
+
+
 def to_year_fraction(date):
     """From https://stackoverflow.com/questions/6451655/how-to-convert-python-datetime-dates-to-decimal-float-years
 
@@ -584,3 +566,21 @@ def dates_to_decimal_years(npdates):
         List: List of decimal years.
     """
     return [to_year_fraction(pd.to_datetime(date)) for date in npdates]
+
+
+def subset_by_midpoint(bayts):
+    """Subset the time series to 100x100 width and height
+
+    Args:
+        bayts (numpy.ndarray): The probability time series.
+
+    Returns:
+        numpy.ndarray: The subsetted timeseries.
+    """
+    ymid, xmid = int(bayts.shape[1] / 2), int(bayts.shape[2] / 2)
+    radius = 50
+    baytssubset = bayts.isel(
+        y=slice(ymid - radius, ymid + radius),
+        x=slice(xmid - radius, xmid + radius),
+    )
+    return baytssubset

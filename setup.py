@@ -32,6 +32,7 @@ inst_reqs = [
     "iteration_utilities>=-0.11.0",
     "scipy",
     "tqdm",
+    "fire",
     # "rio-cogeo==2.1",
     # "cogeo-mosaic==3.0.0rc1",
     # "rio-tiler==2.0.3",
