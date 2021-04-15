@@ -264,10 +264,21 @@ def bayts_update_ufunc(
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
         flag_status = update_pixel_ufunc(y, x, pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
         is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array("Confirmed")
-        flagged_change_full_size = np.zeros(pixel_ts.shape, dtype=bool)
+        flagged_change_with_nans = np.zeros(pixel_ts.shape, dtype=bool)
         if np.any(is_confirmed_flagged_change_ts):
-            flagged_change_full_size[~np.isnan(pixel_ts)] = is_confirmed_flagged_change_ts
-        return flagged_change_full_size
+            flagged_change_with_nans[~np.isnan(pixel_ts)] = is_confirmed_flagged_change_ts
+        return flagged_change_with_nans
+
+
+def create_flag_status_arr(flagged_change):
+    # for each observation, we update it starting from the observation and it's next future neighbor
+    flag_status = np.char.array(flagged_change)  # change to a list get byte to str
+    true_mask = np.full_like(flag_status, "True")
+    noflag_mask = np.full_like(flag_status, "NoFl")
+    flagged_mask = np.full_like(flag_status, "Flag")
+    flag_status = np.where(flag_status == true_mask, flagged_mask, noflag_mask)
+    flag_status = [status.decode("UTF-8") for status in flag_status]
+    return flag_status
 
 
 def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float):
@@ -280,13 +291,7 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
     original_pixel_ts = pixel_ts.copy()
     flagged_change = initial_flag.copy()
     possible_nf_indices = np.argwhere(initial_flag)
-    # for each observation, we update it starting from the observation and it's next future neighbor
-    flag_status = np.char.array(flagged_change)  # change to a list get byte to str
-    true_mask = np.full_like(flag_status, "True")
-    noflag_mask = np.full_like(flag_status, "NoFl")
-    flagged_mask = np.full_like(flag_status, "Flag")
-    flag_status = np.where(flag_status == true_mask, flagged_mask, noflag_mask)
-    flag_status = [status.decode("UTF-8") for status in flag_status]
+    flag_status = create_flag_status_arr(flagged_change)
     t_plus_one_obs_used_for_updating = 0
     # ind should never be 0 or t-1 doesn't work
     for ind in possible_nf_indices:
@@ -338,6 +343,42 @@ def update_pixel_ufunc(y, x, pixel_ts, initial_flag, chi: float, cpnf_min: float
     return flag_status  # this is returned if none of the initially flagged observations were confirmed with chi
 
 
+def run_bayts_with_monitor_start(pixel_ts, initial_change_ts, nanmask, date_index, monitor_start):
+    # used to truncate a monitoring period to focus on latter part of timeseries. needs to happen in loop since
+    # we need to include the observation that is before and closest to the monitor start date and this
+    # can occur at a variable date
+    dates_before_monitoring = date_index[~nanmask][
+        date_index[~nanmask] < np.datetime64(monitor_start)
+    ]
+    monitor_start_t_minus_1 = dates_before_monitoring[-2]
+    if len(dates_before_monitoring) == 0:
+        pixel_ts = np.concatenate([0.5], pixel_ts)
+        initial_change_ts = np.concatenate([False], initial_change_ts)
+        after_monitor_start_t_minus_1 = date_index >= monitor_start_t_minus_1
+        after_monitor_start_t_minus_1 = np.concatenate([False], after_monitor_start_t_minus_1)
+        after_monitor_start_t_minus_1_indices = np.where(after_monitor_start_t_minus_1)
+    else:
+        # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
+        after_monitor_start_t_minus_1 = date_index > monitor_start_t_minus_1
+        after_monitor_start_t_minus_1_indices = np.where(after_monitor_start_t_minus_1)
+        pixel_ts = pixel_ts[after_monitor_start_t_minus_1]
+        initial_change_ts = initial_change_ts[after_monitor_start_t_minus_1]
+        # we don't consider the observation before the monitoring start date, we only use it for updating
+        initial_change_ts[0] = False
+    is_confirmed_flagged_change_ts = bayts_update_ufunc(
+        y, x, pixel_ts, initial_change_ts, chi, cpnf_min
+    )
+    # we only want the output that occurs after the monitor start
+    confirmed_date = dates_to_decimal_years(
+        date_index[date_index > monitor_start_t_minus_1][is_confirmed_flagged_change_ts]
+    )
+    flagged_change_output[
+        after_monitor_start_t_minus_1_indices[0][1:], y, x
+    ] = is_confirmed_flagged_change_ts[1:]
+    if y == 50 and x == 63:
+        b = 1
+
+
 def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_start=None):
     """Loop through pixels to update each pixel time series probabilities. Used for debugging.
 
@@ -364,57 +405,10 @@ def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_
             if nanmask.all():
                 pass
             else:
-                if monitor_start:
-                    # used to truncate a monitoring period to focus on latter part of timeseries. needs to happen in loop since
-                    # we need to include the observation that is before and closest to the monitor start date and this
-                    # can occur at a variable date
-                    dates_before_monitoring = date_index[~nanmask][
-                        date_index[~nanmask] < np.datetime64(monitor_start)
-                    ]
-                    if len(dates_before_monitoring) == 0:
-                        pixel_ts = np.concatenate([0.5], pixel_ts)
-                        initial_change_ts = np.concatenate([False], initial_change_ts)
-                        after_monitor_start_t_minus_1 = date_index >= monitor_start_t_minus_1
-                        after_monitor_start_t_minus_1 = np.concatenate(
-                            [False], after_monitor_start_t_minus_1
-                        )
-                        after_monitor_start_t_minus_1_indices = np.where(
-                            after_monitor_start_t_minus_1
-                        )
-                    else:
-                        monitor_start_t_minus_1 = dates_before_monitoring[-2]
-                        # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
-                        after_monitor_start_t_minus_1 = date_index > monitor_start_t_minus_1
-                        after_monitor_start_t_minus_1_indices = np.where(
-                            after_monitor_start_t_minus_1
-                        )
-                        pixel_ts = pixel_ts[after_monitor_start_t_minus_1]
-                        initial_change_ts = initial_change_ts[after_monitor_start_t_minus_1]
-                        # we don't consider the observation before the monitoring start date, we only use it for updating
-                        initial_change_ts[0] = False
-                    is_confirmed_flagged_change_ts = bayts_update_ufunc(
-                        y, x, pixel_ts, initial_change_ts, chi, cpnf_min
-                    )
-                    # we only want the output that occurs after the monitor start
-                    confirmed_date = dates_to_decimal_years(
-                        date_index[date_index > monitor_start_t_minus_1][
-                            is_confirmed_flagged_change_ts
-                        ]
-                    )
-                    flagged_change_output[
-                        after_monitor_start_t_minus_1_indices[0][1:], y, x
-                    ] = is_confirmed_flagged_change_ts[1:]
-                    if y == 50 and x == 63:
-                        b = 1
-                else:
-                    flagged_change_ts = bayts_update_ufunc(
-                        pixel_ts, initial_change_ts, chi, cpnf_min
-                    )
-                    flagged_change_output[:, y, x] = flagged_change_ts[after_monitor_start]
-    if monitor_start:
-        return flagged_change_output[after_monitor_start]
-    else:
-        return flagged_change_output
+                flagged_change_output = run_bayts_with_monitor_start(
+                    pixel_ts, initial_change_ts, nanmask, date_index, monitor_start
+                )
+    return flagged_change_output[after_monitor_start]
 
 
 def bayts_da_to_date_array(flagged_change):
