@@ -15,8 +15,12 @@ Why does this file exist, and why not put this in __main__?
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
 import fire
-from eval import run_bayts_and_evaluate
+from pybayts.eval import run_bayts_and_evaluate
+
+
+def main():
+    fire.Fire(run_bayts_and_evaluate)
 
 
 if __name__ == "__main__":
-    fire.Fire(run_bayts_and_evaluate)
+    main()
