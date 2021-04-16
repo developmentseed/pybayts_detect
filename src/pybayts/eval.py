@@ -195,6 +195,7 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name, figdir, sub_category_ref=Non
 
 
 def run_bayts_and_evaluate(
+    monitor_start: Tuple,
     landsat_csv: str,
     sentinel_csv: str,
     sentinel_aoi_csv_path: str,
@@ -223,6 +224,7 @@ def run_bayts_and_evaluate(
     Also saves confusion matrix figs in a local directory.
 
     Args:
+        monitor_start (Tuple): (year, month, day) like (2016,1,1)
         landsat_csv (str): CSV with paths to scenes on Azure West Europe, including SAS token.
         sentinel_csv (str): CSV with GRD IDs from an ASF Vertex search, with the Full .SAFE ID.
         sentinel_aoi_csv_path (str): Path to save out a csv with actual paths to sentinel scenes
@@ -300,10 +302,8 @@ def run_bayts_and_evaluate(
 
     initial_change = xr.where(bayts >= 0.5, True, False)
     # for R compare
-    decimal_years = [
-        to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values
-    ]
-    monitor_start = datetime(2016, 1, 1)
+    decimal_years = [to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values]
+    monitor_start = datetime(monitor_start[0], monitor_start[1], monitor_start[2])
     flagged_change = loop_bayts_update(
         bayts.data,
         initial_change.data,
@@ -333,7 +333,5 @@ def run_bayts_and_evaluate(
         decimal_yr_arr.shape,
     )
 
-    f1scores = evaluate(
-        groundtruth_arr_repr_match, decimal_yr_arr, aoi_name, "./figs", sub_cat
-    )
+    f1scores = evaluate(groundtruth_arr_repr_match, decimal_yr_arr, aoi_name, "./figs", sub_cat)
     return f1scores, decimal_yr_arr, groundtruth_arr_repr_match

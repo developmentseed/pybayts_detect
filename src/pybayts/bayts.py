@@ -6,7 +6,7 @@ References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bay
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Tuple
 
 import numpy as np
@@ -93,9 +93,7 @@ def deseason_ts(
     if min_v:
         timeseries = timeseries.where(timeseries < min_v, np.nan, timeseries)
     # percentiles for each raster scene
-    percentiles = timeseries.quantile(
-        percentile, dim=("x", "y"), interpolation="nearest"
-    )
+    percentiles = timeseries.quantile(percentile, dim=("x", "y"), interpolation="nearest")
 
     for i in tqdm(range(len(timeseries))):
         timeseries[i] = timeseries[i] - percentiles[i]
@@ -148,34 +146,24 @@ def calc_cpnf(
         # Gaussian pdf (mean and sd)
         if pdf_type[0] == "gaussian":
             # the probability of observing the observation given it is non-forest
-            pobs_f = stats.norm.pdf(
-                x=timeseries, loc=forest_dist[0], scale=forest_dist[1]
-            )
+            pobs_f = stats.norm.pdf(x=timeseries, loc=forest_dist[0], scale=forest_dist[1])
         elif pdf_type[0] == "weibull":
-            pobs_f = stats.weibull.pdf(
-                x=timeseries, shape=forest_dist[0], scale=forest_dist[1]
-            )
+            pobs_f = stats.weibull.pdf(x=timeseries, shape=forest_dist[0], scale=forest_dist[1])
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[0].")
 
         # Weibull pdf (shape and scale), TODO figure out why loc (the mean) wasn't supplied for this distribution
         if pdf_type[1] == "gaussian":
-            pobs_nf = stats.norm.pdf(
-                x=timeseries, loc=nforest_dist[0], scale=nforest_dist[1]
-            )
+            pobs_nf = stats.norm.pdf(x=timeseries, loc=nforest_dist[0], scale=nforest_dist[1])
         elif pdf_type[1] == "weibull":
-            pobs_nf = stats.weibull.pdf(
-                x=timeseries, shape=nforest_dist[0], scale=nforest_dist[1]
-            )
+            pobs_nf = stats.weibull.pdf(x=timeseries, shape=nforest_dist[0], scale=nforest_dist[1])
         else:
             raise ValueError("Must supply 'gaussian' or 'weibull' for pdf[1].")
 
         # calculate conditinal NF
         pobs_nf[pobs_nf < 1e-100] = 0
         # pobs_nf is now the conditional NF probability, not p of the observation given NF
-        pobs_nf[pobs_nf > 0] = pobs_nf[pobs_nf > 0] / (
-            pobs_f[pobs_nf > 0] + pobs_nf[pobs_nf > 0]
-        )
+        pobs_nf[pobs_nf > 0] = pobs_nf[pobs_nf > 0] / (pobs_f[pobs_nf > 0] + pobs_nf[pobs_nf > 0])
         # apply block weighting function
         pobs_nf[pobs_nf < bwf[0]] = bwf[0]
         pobs_nf[pobs_nf > bwf[1]] = bwf[1]
@@ -194,9 +182,7 @@ def calc_posterior(prior, likelihood):
     Returns:
         float: The posterior probability of a pixel being non forest given an observed data point.
     """
-    return (prior * likelihood) / (
-        (prior * likelihood) + ((1 - prior) * (1 - likelihood))
-    )
+    return (prior * likelihood) / ((prior * likelihood) + ((1 - prior) * (1 - likelihood)))
 
 
 def create_bayts_ts(timeseries):
@@ -212,9 +198,7 @@ def create_bayts_ts(timeseries):
     """
     # refined cpnf for dates with observation of s1vv and lndvi
     # lines 68-77 jreiche bayts
-    refined_cpnf_two_obs = calc_posterior(
-        timeseries["cpnf_s1vv"], timeseries["cpnf_lndvi"]
-    )
+    refined_cpnf_two_obs = calc_posterior(timeseries["cpnf_s1vv"], timeseries["cpnf_lndvi"])
     # where we have ndvi observations, we want to use the refined cpnf since ndvi is more related to deforestation than backscatter
     timeseries["cpnf_s1vv_refined"] = xr.where(
         timeseries["cpnf_s1vv"].notnull() & timeseries["cpnf_lndvi"].notnull(),
@@ -223,9 +207,7 @@ def create_bayts_ts(timeseries):
     )
     # where we don't have backscatter but we have ndvi, we want to use ndvi cpnf
     nan_s1vv = timeseries["cpnf_s1vv_refined"].isnull()
-    bayts = xr.where(
-        nan_s1vv, timeseries["cpnf_lndvi"], timeseries["cpnf_s1vv_refined"]
-    )
+    bayts = xr.where(nan_s1vv, timeseries["cpnf_lndvi"], timeseries["cpnf_s1vv_refined"])
     # any nans left in the output should be from image boundary issues or quality masking
     return bayts
 
@@ -262,17 +244,11 @@ def bayts_update_ufunc(
     else:
         pixel_ts_nonan = pixel_ts[~np.isnan(pixel_ts)]
         initial_flag_nonan = initial_flag[~np.isnan(pixel_ts)]
-        flag_status = update_pixel_ufunc(
-            pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min
-        )
-        is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array(
-            "Confirmed"
-        )
+        flag_status = update_pixel_ufunc(pixel_ts_nonan, initial_flag_nonan, chi, cpnf_min)
+        is_confirmed_flagged_change_ts = np.char.array(flag_status) == np.char.array("Confirmed")
         flagged_change_with_nans = np.zeros(pixel_ts.shape, dtype=bool)
         if np.any(is_confirmed_flagged_change_ts):
-            flagged_change_with_nans[
-                ~np.isnan(pixel_ts)
-            ] = is_confirmed_flagged_change_ts
+            flagged_change_with_nans[~np.isnan(pixel_ts)] = is_confirmed_flagged_change_ts
         return flagged_change_with_nans
 
 
@@ -387,26 +363,31 @@ def run_bayts_with_monitor_start(
         date_index[~nanmask] < np.datetime64(monitor_start)
     ]
     if len(dates_before_monitoring) == 0:
-        monitored_pixel_ts = np.concatenate([0.5], pixel_ts)
-        monitored_initial_change_ts = np.concatenate([False], initial_change_ts)
-        bayts_date_index = np.concatenate([bayts_date_index[0] - 1], date_index)
-    monitor_start_t_minus_1 = dates_before_monitoring[-1]
-    # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
-    is_monitored = bayts_date_index >= monitor_start_t_minus_1
-    monitored_pixel_ts = pixel_ts[is_monitored]
-    monitored_initial_change_ts = initial_change_ts[is_monitored]
-    # we don't consider the observation before the monitoring start date, we only use it for updating
-    monitored_initial_change_ts[0] = False
-    # this result only filters the monitoring period
-    is_confirmed_flagged_change_ts = bayts_update_ufunc(
-        monitored_pixel_ts, monitored_initial_change_ts, chi, cpnf_min
-    )
-    return is_confirmed_flagged_change_ts, is_monitored
+        monitored_pixel_ts = np.concatenate(([0.5], pixel_ts))
+        monitored_initial_change_ts = np.concatenate(([False], initial_change_ts))
+        monitor_start_t_minus_1 = np.datetime64(monitor_start - timedelta(days=1))
+        is_monitored = bayts_date_index >= monitor_start_t_minus_1
+        is_confirmed_flagged_change_ts = bayts_update_ufunc(
+            monitored_pixel_ts, monitored_initial_change_ts, chi, cpnf_min
+        )
+        # we leave out the concatenated dummy observation
+        return is_confirmed_flagged_change_ts[1:], is_monitored
+    else:
+        monitor_start_t_minus_1 = dates_before_monitoring[-1]
+        is_monitored = bayts_date_index >= monitor_start_t_minus_1
+        # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
+        monitored_pixel_ts = pixel_ts[is_monitored]
+        monitored_initial_change_ts = initial_change_ts[is_monitored]
+        # we don't consider the observation before the monitoring start date, we only use it for updating
+        monitored_initial_change_ts[0] = False
+        # this result only filters the monitoring period
+        is_confirmed_flagged_change_ts = bayts_update_ufunc(
+            monitored_pixel_ts, monitored_initial_change_ts, chi, cpnf_min
+        )
+        return is_confirmed_flagged_change_ts, is_monitored
 
 
-def loop_bayts_update(
-    bayts, initial_change, date_index, chi, cpnf_min, monitor_start=None
-):
+def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_start=None):
     """Loop through pixels to update each pixel time series probabilities. Used for debugging.
 
     Args:
@@ -432,10 +413,7 @@ def loop_bayts_update(
             if nanmask.all():
                 pass
             else:
-                (
-                    is_confirmed_flagged_change_ts,
-                    is_monitored,
-                ) = run_bayts_with_monitor_start(
+                (is_confirmed_flagged_change_ts, is_monitored,) = run_bayts_with_monitor_start(
                     pixel_ts,
                     initial_change_ts,
                     nanmask,
@@ -448,15 +426,9 @@ def loop_bayts_update(
                     date_index[is_monitored][is_confirmed_flagged_change_ts]
                 )
                 is_monitored_indices = np.where(is_monitored)
-                first_date_flagged_arr = bool_to_first_true(
-                    is_confirmed_flagged_change_ts[1:]
-                )
-                confirmed_date_arr = bool_to_last_true(
-                    is_confirmed_flagged_change_ts[1:]
-                )
-                flagged_change_output[
-                    is_monitored_indices[0][1:], y, x
-                ] = confirmed_date_arr
+                first_date_flagged_arr = bool_to_first_true(is_confirmed_flagged_change_ts[1:])
+                confirmed_date_arr = bool_to_last_true(is_confirmed_flagged_change_ts[1:])
+                flagged_change_output[is_monitored_indices[0][1:], y, x] = confirmed_date_arr
     return flagged_change_output[after_monitor_start]
 
 
