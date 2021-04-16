@@ -141,7 +141,7 @@ def calc_cpnf(
         pdfNF = [0.3, 0.2]  # mean and sd
         pdf = tuple(pdf_type + pdfF + pdfNF)
         # calculate conditional non-forest probabilities
-        calc_pnf(ndvi, pdf)
+        calc_cpnf(ndvi, pdf)
     """
 
     if len(timeseries) > 0:
