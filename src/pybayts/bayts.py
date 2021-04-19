@@ -6,7 +6,7 @@ References: {http://www.mdpi.com/2072-4292/7/5/4973}{Reiche et al. (2015): A Bay
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Tuple
 
 import numpy as np
@@ -363,28 +363,21 @@ def run_bayts_with_monitor_start(
         date_index[~nanmask] < np.datetime64(monitor_start)
     ]
     if len(dates_before_monitoring) == 0:
-        monitored_pixel_ts = np.concatenate(([0.5], pixel_ts))
-        monitored_initial_change_ts = np.concatenate(([False], initial_change_ts))
-        monitor_start_t_minus_1 = np.datetime64(monitor_start - timedelta(days=1))
-        is_monitored = bayts_date_index >= monitor_start_t_minus_1
-        is_confirmed_flagged_change_ts = bayts_update_ufunc(
-            monitored_pixel_ts, monitored_initial_change_ts, chi, cpnf_min
+        raise ValueError(
+            "There needs to be at least one date before the monitor start date. Shift the monitoring start date or prepend to the bayts input raster time series if needed."
         )
-        # we leave out the concatenated dummy observation
-        return is_confirmed_flagged_change_ts[1:], is_monitored
-    else:
-        monitor_start_t_minus_1 = dates_before_monitoring[-1]
-        is_monitored = bayts_date_index >= monitor_start_t_minus_1
-        # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
-        monitored_pixel_ts = pixel_ts[is_monitored]
-        monitored_initial_change_ts = initial_change_ts[is_monitored]
-        # we don't consider the observation before the monitoring start date, we only use it for updating
-        monitored_initial_change_ts[0] = False
-        # this result only filters the monitoring period
-        is_confirmed_flagged_change_ts = bayts_update_ufunc(
-            monitored_pixel_ts, monitored_initial_change_ts, chi, cpnf_min
-        )
-        return is_confirmed_flagged_change_ts, is_monitored
+    monitor_start_t_minus_1 = dates_before_monitoring[-1]
+    # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
+    is_monitored = bayts_date_index >= monitor_start_t_minus_1
+    monitored_pixel_ts = pixel_ts[is_monitored]
+    monitored_initial_change_ts = initial_change_ts[is_monitored]
+    # we don't consider the observation before the monitoring start date, we only use it for updating
+    monitored_initial_change_ts[0] = False
+    # this result only filters the monitoring period
+    is_confirmed_flagged_change_ts = bayts_update_ufunc(
+        monitored_pixel_ts, monitored_initial_change_ts, chi, cpnf_min
+    )
+    return is_confirmed_flagged_change_ts, is_monitored
 
 
 def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_start=None):
