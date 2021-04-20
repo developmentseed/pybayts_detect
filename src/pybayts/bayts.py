@@ -396,7 +396,7 @@ def loop_bayts_update(bayts, initial_change, date_index, chi, cpnf_min, monitor_
             so that dates are properly assigned to the True booleans.
     """
     flagged_change_output = initial_change.copy()
-    after_monitor_start = date_index > np.datetime64(monitor_start)
+    after_monitor_start = date_index >= np.datetime64(monitor_start)
     for y in tqdm(range(bayts.shape[1])):
         for x in range(bayts.shape[2]):
             pixel_ts = bayts[:, y, x]
