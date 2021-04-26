@@ -276,13 +276,15 @@ def run_bayts_and_evaluate(
         l8_merged_ndvi_outfolder_dir,
         sentinel_merged_outfolder_dir,
     )
+    ndvi_ts = subset_by_midpoint(ndvi_ts)
+    s1_ts = subset_by_midpoint(s1_ts)
 
     s1_ts.name = "s1"
 
     ndvi_ts.name = "ndvi"
-
-    _ = deseason_ts(s1_ts.load())  # required to load because of percentile math
-    _ = deseason_ts(ndvi_ts.load())
+    # TODO removing because distributions are not computed on deseasonalized time series yet
+    # _ = deseason_ts(s1_ts.load())  # required to load because of percentile math
+    # _ = deseason_ts(ndvi_ts.load())
 
     cpnf_ts = merge_cpnf_tseries(
         s1_ts,
@@ -298,7 +300,6 @@ def run_bayts_and_evaluate(
     )
 
     bayts = create_bayts_ts(cpnf_ts)
-    bayts = subset_by_midpoint(bayts)
 
     initial_change = xr.where(bayts >= 0.5, True, False)
     # for R compare
