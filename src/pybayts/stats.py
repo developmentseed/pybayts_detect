@@ -31,8 +31,7 @@ def compute_stats(merged_dir_sar, merged_dir_ndvi, sar_subset_forest, sar_subset
         ndvi_subset_nonforest (str): path to geojson for sample non-forested area in NDVI imagery
 
     Returns:
-        Dictionaries containing [mininum, mean, maximum, standard deviation, sample area pixel count] 
-        for forest and non-forest from SAR and NDVI time series.
+        Average forest and non-forest mean and standard deviations from the SAR and NDVI time series.
     """
     sar_stats_forest = [] 
     sar_stats_nonforest = []
