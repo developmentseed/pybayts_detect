@@ -7,19 +7,17 @@ from datetime import datetime
 from typing import Tuple
 
 import numpy as np
-import pandas as pd
 import rioxarray as rx
 import xarray as xr
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
 
+# from pybayts.bayts import deseason_ts # TODO recalculate distributions on deaseasoned ts so we can run bayts on deseasoned ts
 from pybayts.bayts import bayts_da_to_date_array
 from pybayts.bayts import create_bayts_ts
-from pybayts.bayts import deseason_ts
 from pybayts.bayts import loop_bayts_update
 from pybayts.bayts import merge_cpnf_tseries
 from pybayts.bayts import subset_by_midpoint
-from pybayts.bayts import to_year_fraction
 from pybayts.data.stack import create_two_timeseries
 from pybayts.plot import plot_cm
 
@@ -303,19 +301,19 @@ def run_bayts_and_evaluate(
 
     initial_change = xr.where(bayts >= 0.5, True, False)
     # for R compare
-    decimal_years = [to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values]
-    monitor_start = datetime(monitor_start[0], monitor_start[1], monitor_start[2])
+    # decimal_years = [to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values]
+    monitor_start_dt = datetime(monitor_start[0], monitor_start[1], monitor_start[2])
     flagged_change = loop_bayts_update(
         bayts.data,
         initial_change.data,
         initial_change.date.values,
         chi,
         cpnf_min,
-        monitor_start,
+        monitor_start_dt,
     )
     bayts.name = "bayts"
     baytsds = bayts.to_dataset()
-    baytsds = baytsds.sel(date=slice(monitor_start, None))
+    baytsds = baytsds.sel(date=slice(monitor_start_dt, None))
     # Need a dataset for the date coordinates
     baytsds["flagged_change"] = (("date", "y", "x"), flagged_change)
 
@@ -334,5 +332,7 @@ def run_bayts_and_evaluate(
         decimal_yr_arr.shape,
     )
 
-    f1scores = evaluate(groundtruth_arr_repr_match, decimal_yr_arr, aoi_name, "./figs", sub_cat)
+    f1scores = evaluate(
+        groundtruth_arr_repr_match, decimal_yr_arr, aoi_name, "./figs", sub_cat
+    )
     return f1scores, decimal_yr_arr, groundtruth_arr_repr_match
