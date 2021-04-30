@@ -387,9 +387,9 @@ def run_bayts_with_monitor_start(
         date_index[~nanmask] < np.datetime64(monitor_start)
     ]
     if len(dates_before_monitoring) == 0:
-        monitored_pixel_ts = np.concatenate([0.5], pixel_ts)
-        monitored_initial_change_ts = np.concatenate([False], initial_change_ts)
-        bayts_date_index = np.concatenate([bayts_date_index[0] - 1], date_index)
+        raise ValueError(
+            "There needs to be at least one date before the monitor start date. Shift the monitoring start date or prepend to the bayts input raster time series if needed."
+        )
     monitor_start_t_minus_1 = dates_before_monitoring[-1]
     # the length varies depending on the pixel because of irregular observations and nodata gaps from masking
     is_monitored = bayts_date_index >= monitor_start_t_minus_1
@@ -422,7 +422,7 @@ def loop_bayts_update(
             so that dates are properly assigned to the True booleans.
     """
     flagged_change_output = initial_change.copy()
-    after_monitor_start = date_index > np.datetime64(monitor_start)
+    after_monitor_start = date_index >= np.datetime64(monitor_start)
     for y in tqdm(range(bayts.shape[1])):
         for x in range(bayts.shape[2]):
             pixel_ts = bayts[:, y, x]
@@ -444,13 +444,11 @@ def loop_bayts_update(
                     chi,
                     cpnf_min,
                 )
-                confirmed_date = dates_to_decimal_years(
-                    date_index[is_monitored][is_confirmed_flagged_change_ts]
-                )
+                # confirmed_date = dates_to_decimal_years(
+                #     date_index[is_monitored][is_confirmed_flagged_change_ts]
+                # ) # useful for debugging
                 is_monitored_indices = np.where(is_monitored)
-                first_date_flagged_arr = bool_to_first_true(
-                    is_confirmed_flagged_change_ts[1:]
-                )
+                # first_date_flagged_arr = bool_to_first_true(is_confirmed_flagged_change_ts[1:]) # useful for debugging
                 confirmed_date_arr = bool_to_last_true(
                     is_confirmed_flagged_change_ts[1:]
                 )

@@ -7,19 +7,17 @@ from datetime import datetime
 from typing import Tuple
 
 import numpy as np
-import pandas as pd
 import rioxarray as rx
 import xarray as xr
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
 
+# from pybayts.bayts import deseason_ts # TODO recalculate distributions on deaseasoned ts so we can run bayts on deseasoned ts
 from pybayts.bayts import bayts_da_to_date_array
 from pybayts.bayts import create_bayts_ts
-from pybayts.bayts import deseason_ts
 from pybayts.bayts import loop_bayts_update
 from pybayts.bayts import merge_cpnf_tseries
 from pybayts.bayts import subset_by_midpoint
-from pybayts.bayts import to_year_fraction
 from pybayts.data.stack import create_two_timeseries
 from pybayts.plot import plot_cm
 
@@ -195,6 +193,7 @@ def evaluate(groundtruth, decimal_yr_arr, aoi_name, figdir, sub_category_ref=Non
 
 
 def run_bayts_and_evaluate(
+    monitor_start: Tuple,
     landsat_csv: str,
     sentinel_csv: str,
     sentinel_aoi_csv_path: str,
@@ -223,6 +222,7 @@ def run_bayts_and_evaluate(
     Also saves confusion matrix figs in a local directory.
 
     Args:
+        monitor_start (Tuple): (year, month, day) like (2016,1,1)
         landsat_csv (str): CSV with paths to scenes on Azure West Europe, including SAS token.
         sentinel_csv (str): CSV with GRD IDs from an ASF Vertex search, with the Full .SAFE ID.
         sentinel_aoi_csv_path (str): Path to save out a csv with actual paths to sentinel scenes
@@ -274,13 +274,15 @@ def run_bayts_and_evaluate(
         l8_merged_ndvi_outfolder_dir,
         sentinel_merged_outfolder_dir,
     )
+    ndvi_ts = subset_by_midpoint(ndvi_ts)
+    s1_ts = subset_by_midpoint(s1_ts)
 
     s1_ts.name = "s1"
 
     ndvi_ts.name = "ndvi"
-
-    _ = deseason_ts(s1_ts.load())  # required to load because of percentile math
-    _ = deseason_ts(ndvi_ts.load())
+    # TODO removing because distributions are not computed on deseasonalized time series yet
+    # _ = deseason_ts(s1_ts.load())  # required to load because of percentile math
+    # _ = deseason_ts(ndvi_ts.load())
 
     cpnf_ts = merge_cpnf_tseries(
         s1_ts,
@@ -296,25 +298,22 @@ def run_bayts_and_evaluate(
     )
 
     bayts = create_bayts_ts(cpnf_ts)
-    bayts = subset_by_midpoint(bayts)
 
     initial_change = xr.where(bayts >= 0.5, True, False)
     # for R compare
-    decimal_years = [
-        to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values
-    ]
-    monitor_start = datetime(2016, 1, 1)
+    # decimal_years = [to_year_fraction(pd.to_datetime(date)) for date in bayts.date.values]
+    monitor_start_dt = datetime(monitor_start[0], monitor_start[1], monitor_start[2])
     flagged_change = loop_bayts_update(
         bayts.data,
         initial_change.data,
         initial_change.date.values,
         chi,
         cpnf_min,
-        monitor_start,
+        monitor_start_dt,
     )
     bayts.name = "bayts"
     baytsds = bayts.to_dataset()
-    baytsds = baytsds.sel(date=slice(monitor_start, None))
+    baytsds = baytsds.sel(date=slice(monitor_start_dt, None))
     # Need a dataset for the date coordinates
     baytsds["flagged_change"] = (("date", "y", "x"), flagged_change)
 
