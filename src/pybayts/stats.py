@@ -15,30 +15,33 @@ import statistics
 from pybayts.data.stack import group_merge_stack
 
 
-def get_stats_dict(imdir, geojson):
-    dist_list = []
-    for f in imdir:
-        arr = rio.open_rasterio(f)
-        arr.rio.reproject("EPSG:4326")
-        arr.rio.to_raster(os.path.join(imdir, f[:-4]+"_4326.tif"))
-        dist = zonal_stats(geojson, os.path.join(imdir, f[:-4]+"_4326.tif"),
-        stats="min mean max std count")
-        dist_list.append(dist)
-    return dist_list
+def mean_std_timeseries(directory, geojson):
+    masked_list = []
+    for f in directory:
+        op = rasterio.open(f)
+        arr = op.read()
+        masked = rasterio.features.geometry_mask(geojson, arr.shape, op.transform, all_touched=True, invert=False)
+        masked = masked.transpose(1,2,0)
+        masked_list.append(masked)
+    masked_stack = np.dstack(masked_list)
+    masked_stack = masked_stack.transpose(2,0,1)
+    masked_stack_out = rasterio.open(f"{directory}/masked_stack.tiff", 'w', driver='Gtiff',
+                              width=op.width, height=op.height,
+                              count=range(len(masked_list)),
+                              crs=op.crs,
+                              transform=op.transform,
+                              dtype=op.dtype)
 
-def get_averages(dist_list):
-    mean_list = []
-    std_list = []
-    for stats_ in dist_list:
-        stats_dict = stats_[0]
-        print(stats_dict)
-        stats_list = []
-        for key,value in stats_dict.items() :
-            stats_list.append(value)
-        mean, std = stats_list[2], stats_list[3]
-        mean_list.append(mean)
-        std_list.append(std)
-    return mean_list, std_list
+    masked_stack_out.write(masked_stack)
+    masked_stack_out.close()
+    arr = rio.open_rasterio(f"{directory}/masked_stack.tiff")
+    arr.rio.reproject("EPSG:4326")
+    arr.rio.to_raster(os.path.join(dir_in, f[:-4]+"_4326.tif"))
+    arr_mask_nodata = np.ma.masked_array(arr, arr == 0)
+    mean = np.mean(arr_mask_nodata) 
+    std = np.std(arr_mask_nodata)   
+    return mean, std
+
 
 
 def compute_stats(merged_dir_sar, merged_dir_ndvi, sar_subset_forest, sar_subset_nonforest, ndvi_subset_forest, ndvi_subset_nonforest):
@@ -64,9 +67,8 @@ def compute_stats(merged_dir_sar, merged_dir_ndvi, sar_subset_forest, sar_subset
                                                                                         ndvi_subset_forest,ndvi_subset_nonforest])
     mean_std_tups = []
     for directory, geojson in arg_tuples:
-        distribution = get_stats_dict(directory, geojson)
-        mean_list, std_list= get_averages(distribution)
-        mean_std_tup = [statistics.mean(mean_list), statistics.mean(std_list)]
+        mean, std = mean_std_timeseries(directory, geojson)
+        mean_std_tup = [mean, std]
         mean_std_tups.append(mean_std_tup)
 
     return mean_std_tups
