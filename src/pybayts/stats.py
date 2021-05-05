@@ -6,6 +6,7 @@ Author: @developmentseed
 import os, json
 import rasterio
 import numpy as np
+import math
 import rasterstats
 from rasterstats import zonal_stats
 import rioxarray as rx
@@ -14,6 +15,17 @@ import statistics
 
 from pybayts.data.stack import group_merge_stack
 
+def variance(arr):
+    n = len(arr)
+    mean = sum(arr) / n
+    deviations = [(x - mean) ** 2 for x in arr]
+    variance = sum(deviations) / n
+    return variance
+
+def stdev(arr):
+    var = variance(arr)
+    std_dev = math.sqrt(var)
+    return std_dev
 
 def mean_std_timeseries(directory, geojson):
     masked_list = []
@@ -37,9 +49,10 @@ def mean_std_timeseries(directory, geojson):
     arr = rio.open_rasterio(f"{directory}/masked_stack.tiff")
     arr.rio.reproject("EPSG:4326")
     arr.rio.to_raster(os.path.join(dir_in, f[:-4]+"_4326.tif"))
-    arr_mask_nodata = np.ma.masked_array(arr, arr == 0)
+    arr_flat = arr.flatten()
+    arr_mask_nodata = arr_flat[arr_flat != 0]
     mean = np.mean(arr_mask_nodata) 
-    std = np.std(arr_mask_nodata)   
+    std = np.std(arr_mask_nodata)    
     return mean, std
 
 

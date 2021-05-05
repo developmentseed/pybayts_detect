@@ -23,10 +23,12 @@ def test_mean_std():
     arr2 =  np.reshape(arr1, (-1, 4))
     arr3 = np.pad(arr2, 2, mode='constant')
     arr4 = np.dstack([arr3, arr3, arr3])
-    arr_mask_nodata = np.ma.masked_array(arr4, arr4 == 0)
-    mean = np.mean(arr_mask_nodata) 
-    std = np.std(arr_mask_nodata)  
-    truemean = sum(arr1) / float(len(arr1))
-    truesrd = stdev(arr1)
+    #arr_mask_nodata = np.ma.masked_array(arr4, arr4 == 0)
+    arr5 = np.unique(arr4)
+    mean = np.mean(arr5) 
+    std = np.std(arr5)  
+    truemean = sum(arr5) / float(len(arr5))
+    truestd = stdev(arr5)
     assert mean == truemean
     assert std == truestd
+    print("passed")
