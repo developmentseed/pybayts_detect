@@ -28,31 +28,33 @@ def stdev(arr):
     return std_dev
 
 def mean_std_timeseries(directory, geojson):
+    # define list to hold images in a time series
     masked_list = []
     for f in directory:
+        # open image in time series
         op = rasterio.open(f)
+        # read each image in time series
         arr = op.read()
+        # apply nodata mask to all pixels outside of sampling polygon
         masked = rasterio.features.geometry_mask(geojson, arr.shape, op.transform, all_touched=True, invert=False)
+        # convert shape from c,w,h to w,h,c
         masked = masked.transpose(1,2,0)
+        # append masked image to time series list
         masked_list.append(masked)
+    # concatenate the time series list into a multi-channel image
     masked_stack = np.dstack(masked_list)
-    masked_stack = masked_stack.transpose(2,0,1)
-    masked_stack_out = rasterio.open(f"{directory}/masked_stack.tiff", 'w', driver='Gtiff',
-                              width=op.width, height=op.height,
-                              count=range(len(masked_list)),
-                              crs=op.crs,
-                              transform=op.transform,
-                              dtype=op.dtype)
-
-    masked_stack_out.write(masked_stack)
-    masked_stack_out.close()
-    arr = rio.open_rasterio(f"{directory}/masked_stack.tiff")
-    arr.rio.reproject("EPSG:4326")
-    arr.rio.to_raster(os.path.join(dir_in, f[:-4]+"_4326.tif"))
+    arr = masked_stack.copy()
+    # flatten the masked time series array
     arr_flat = arr.flatten()
+    # remove all nodata from the flattened array
     arr_mask_nodata = arr_flat[arr_flat != 0]
+    # compute the mean and std
     mean = np.mean(arr_mask_nodata) 
-    std = np.std(arr_mask_nodata)    
+    std = np.std(arr_mask_nodata) 
+    truemean = sum(arr_mask_nodata) / float(len(arr_mask_nodata))
+    truestd = stdev(arr_mask_nodata)
+    assert mean == truemean
+    assert std == truestd
     return mean, std
 
 
