@@ -96,3 +96,13 @@ Note, to combine the coverage data from all the tox environments run:
       - ::
 
             PYTEST_ADDOPTS=--cov-append tox
+
+
+If running on the Planetary Computer, some steps need to be taken since PC libs are out of date
+
+```
+conda update conda # in base env 
+conda env create -f environment.yaml
+conda activate pybayts
+pip install -e .
+```
