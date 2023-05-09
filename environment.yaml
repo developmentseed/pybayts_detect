@@ -1,25 +1,40 @@
 name: pybayts
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   - seaborn>=0.11.1
   - iteration_utilities>=0.11.0
   - tqdm
   - fire
-  # Python scientific libraries
-  - scipy>=1.6.1
-  - scikit-learn
-  - numpy>=1.20.0
-  - numba>=0.53
-  - matplotlib>=3.4.0
-  - xarray>=0.17
-  # Geospatial libraries
-  - rasterio>=1.2.0
-  - geocube>=0.0.16
-  - geopandas>=0.8.0
-  - rioxarray>=0.7.0
-  - earthpy>=0.9.0
-  - xarray-spatial
+  - boto3
+  - dask
   - descartes>=1.0.0 # necessary for geopandas plotting
-  - pystac-client==0.3.2 # pin version to work with earth-search STAC API
-  - python-graphviz # necessary for plotting dask graphs
+  - earthaccess
+  - geocube
+  - geopandas
+  - graphviz
+  - hydra-core
+  - ipywidgets
+  - jupyterlab
+  - lightning>=2.0.0
+  - matplotlib
+  - numpy>=1.21
+  - pandas
+  - pip
+  - pyogrio
+  - pystac-client
+  - python>=3.8
+  - pytorch>=2.0.0
+  - rasterio
+  - rich
+  - rioxarray
+  - scikit-learn
+  - seaborn
+  - setuptools
+  - stackstac
+  - torchdata>=0.6.0
+  - wandb
+  - xbatcher
+  - xstac
+  - zen3geo

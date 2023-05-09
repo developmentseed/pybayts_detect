@@ -75,3 +75,6 @@ docs/_build
 
 Makefile
 notebooks/.ipynb_checkpoints
+.ipynb_checkpoints/
+Untitled.ipynb
+notebooks/stackstac_to_zarr.ipynb
