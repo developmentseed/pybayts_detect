@@ -25,6 +25,7 @@ dependencies:
   - pyogrio
   - pystac-client
   - python>=3.8
+  - python-graphviz
   - pytorch>=2.0.0
   - rasterio
   - rich

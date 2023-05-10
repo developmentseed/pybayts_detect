@@ -67,14 +67,13 @@ SHELL ["conda", "run", "-n", "pybayts", "/bin/bash", "-c"]
 # # Log in to Weights and Biases
 # RUN wandb login
 
-WORKDIR /home/$USERNAME/pybayts
+WORKDIR /home/$USERNAME/pybayts_detect
 
-VOLUME  /home/$USERNAME/pybayts
+VOLUME  /home/$USERNAME/pybayts_detect
 
-# Copy the library file to the image
-COPY src/ /home/$USERNAME/pybayts/src
-COPY tox.ini /home/$USERNAME/pybayts
-COPY pyproject.toml /home/$USERNAME/pybayts
+# Copy the library to the image
+COPY pybayts/ /home/$USERNAME/pybayts_detect/
+COPY setup.py /home/$USERNAME/pybayts_detect/
 RUN conda run -n pybayts pip install -e .
 
 # so we can activate envs in vscode remote container connection
